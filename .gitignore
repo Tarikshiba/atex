@@ -1,0 +1,11 @@
+# Fichiers de dépendances
+node_modules/
+
+# Fichiers d'environnement
+.env
+
+# Fichier de clé de service Firebase (TRÈS IMPORTANT)
+serviceAccountKey.json
+
+# Fichiers de log
+npm-debug.log

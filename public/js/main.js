@@ -1,0 +1,371 @@
+document.addEventListener('DOMContentLoaded', async function() {
+    // State global de l'application
+    const state = {
+        config: {},
+        transaction: { type: 'buy' }
+    };
+
+    // --- DOM ELEMENTS ---
+    const buyAmountInput = document.getElementById('buy-amount');
+    const receiveAmountDisplay = document.getElementById('receive-amount');
+    const cryptoSelectBuy = document.getElementById('crypto-select');
+    const sellAmountInput = document.getElementById('sell-amount');
+    const receiveAmountSellDisplay = document.getElementById('receive-amount-sell');
+    const cryptoSelectSell = document.getElementById('crypto-select-sell');
+    const sellCurrencySymbol = document.getElementById('sell-currency-symbol');
+    const buyWalletAddressInput = document.getElementById('buy-wallet-address');
+    const sellPhoneNumberInput = document.getElementById('sell-phone-number');
+    const initiateBuyBtn = document.getElementById('initiate-buy-btn');
+    const initiateSellBtn = document.getElementById('initiate-sell-btn');
+    const header = document.getElementById('header');
+
+    // --- LOGIQUE PRINCIPALE ---
+
+    // 1. Fonctions de chargement des données
+    async function loadConfiguration() {
+        try {
+            const response = await fetch('/api/config');
+            if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+            state.config = await response.json();
+            initializeCalculators();
+        } catch (error) {
+            console.error("Impossible de charger la configuration:", error);
+            document.getElementById('exchange').innerHTML = `<div class="p-4 text-center bg-red-100 text-red-700 rounded-lg">Erreur de connexion. Impossible de charger les taux.</div>`;
+        }
+    }
+
+    // =======================================================
+    // === NOUVELLES FONCTIONS POUR CHARGER LE CONTENU (CMS) ===
+    // =======================================================
+    async function loadPressArticles() {
+        try {
+            const response = await fetch('/api/press-articles');
+            if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+            const articles = await response.json();
+            renderPressArticles(articles);
+        } catch (error) {
+            console.error("Impossible de charger les articles de presse:", error);
+            document.getElementById('press-articles-container').innerHTML = `<div class="p-4 text-center bg-red-100 text-red-700 rounded-lg">Impossible de charger les articles.</div>`;
+        }
+    }
+
+    async function loadKnowledgeArticles() {
+        try {
+            const response = await fetch('/api/knowledge-articles');
+            if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+            const articles = await response.json();
+            renderKnowledgeArticles(articles);
+        } catch (error) {
+            console.error("Impossible de charger les articles de savoir:", error);
+            document.getElementById('knowledge-articles-container').innerHTML = `<div class="p-4 text-center bg-red-100 text-red-700 rounded-lg">Impossible de charger les articles.</div>`;
+        }
+    }
+
+
+    // 2. Fonctions de calcul
+    function calculateBuyAmount() {
+        if (!state.config.rates) return;
+        const amountFCFA = parseFloat(buyAmountInput.value) || 0;
+        const crypto = cryptoSelectBuy.value;
+        const finalCryptoAmount = (amountFCFA * (1 - state.config.feePercentage / 100)) * state.config.rates.buy[crypto];
+        let precision = crypto === 'btc' ? 8 : (crypto === 'eth' ? 6 : 4);
+        receiveAmountDisplay.textContent = `${finalCryptoAmount.toFixed(precision)} ${crypto.toUpperCase()}`;
+        state.transaction.amountToSend = amountFCFA;
+        state.transaction.amountToReceive = finalCryptoAmount;
+        state.transaction.currencyFrom = 'FCFA';
+        state.transaction.currencyTo = crypto.toUpperCase();
+    }
+    
+    function calculateSellAmount() {
+        if (!state.config.rates) return;
+        const amountCrypto = parseFloat(sellAmountInput.value) || 0;
+        const crypto = cryptoSelectSell.value;
+        const calculatedAmount = (amountCrypto * (1 - state.config.feePercentage / 100)) * state.config.rates.sell[crypto];
+        sellCurrencySymbol.textContent = crypto.toUpperCase();
+        receiveAmountSellDisplay.textContent = `${new Intl.NumberFormat('fr-FR').format(calculatedAmount.toFixed(0))} FCFA`;
+        state.transaction.amountToSend = amountCrypto;
+        state.transaction.amountToReceive = calculatedAmount;
+        state.transaction.currencyFrom = crypto.toUpperCase();
+        state.transaction.currencyTo = 'FCFA';
+    }
+
+    // 3. Logique d'initiation de transaction
+    async function handleInitiateTransaction() {
+        const currentType = state.transaction.type;
+        const button = currentType === 'buy' ? initiateBuyBtn : initiateSellBtn;
+        const originalButtonText = button.innerHTML;
+
+        if (!state.transaction.amountToSend || state.transaction.amountToSend <= 0) {
+            alert("Veuillez entrer un montant valide et supérieur à zéro.");
+            return;
+        }
+
+        if (currentType === 'buy') {
+            state.transaction.walletAddress = buyWalletAddressInput.value;
+            if (!state.transaction.walletAddress || !state.transaction.paymentMethod) {
+                alert("Veuillez entrer votre adresse de portefeuille et choisir un moyen de paiement.");
+                return;
+            }
+        } else {
+            state.transaction.phoneNumber = sellPhoneNumberInput.value;
+             if (!state.transaction.phoneNumber || !state.transaction.paymentMethod) {
+                alert("Veuillez entrer votre numéro de téléphone et choisir un moyen de réception.");
+                return;
+            }
+        }
+
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Initialisation...';
+
+        try {
+            const response = await fetch('/api/initiate-transaction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(state.transaction)
+            });
+            if (!response.ok) {
+                const errorResult = await response.json();
+                throw new Error(errorResult.message || 'La réponse du serveur n\'est pas OK');
+            }
+            const result = await response.json();
+            window.location.href = result.whatsappUrl;
+        } catch (error) {
+            console.error('Erreur lors de l\'initiation de la transaction:', error);
+            alert(`Une erreur est survenue : ${error.message}`);
+        } finally {
+            button.disabled = false;
+            button.innerHTML = originalButtonText;
+        }
+    }
+
+
+    // =================================================
+    // === NOUVELLES FONCTIONS POUR AFFICHER LE CONTENU ===
+    // =================================================
+
+    function renderPressArticles(articles) {
+    const container = document.getElementById('press-articles-container');
+    if (!container) return;
+    if (articles.length === 0) {
+        container.innerHTML = '<p class="text-center text-warm-gray">Aucun article pour le moment.</p>';
+        return;
+    }
+
+    // Fonction pour formater la date en toute sécurité
+    const formatDate = (dateObject) => {
+        if (dateObject && dateObject.seconds) {
+            return new Date(dateObject.seconds * 1000).toLocaleDateString('fr-FR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+        return 'Date non disponible'; // Message par défaut si la date est invalide
+    };
+
+    const featuredArticle = articles[0];
+    const otherArticles = articles.slice(1);
+
+    let html = `
+        <a href="${featuredArticle.url}" target="_blank" class="featured-article block bg-white rounded-2xl overflow-hidden relative" style="background-image: url('${featuredArticle.imageUrl}'); background-size: cover; background-position: center;">
+            <div class="absolute inset-0 bg-gradient-to-t from-deep-night to-transparent opacity-80 z-10"></div>
+            <div class="absolute bottom-0 left-0 p-8 z-20">
+                <span class="bg-forest-green text-white text-sm font-medium px-3 py-1 rounded-full mb-3 inline-block">${featuredArticle.category}</span>
+                <h3 class="text-3xl font-bold text-white mb-4">${featuredArticle.title}</h3>
+                <div class="flex items-center text-sm text-white">
+                    <span>${formatDate(featuredArticle.publishedDate)}</span>
+                    <span class="mx-2">•</span>
+                    <span>${featuredArticle.readingTime} min de lecture</span>
+                </div>
+            </div>
+        </a>
+    `;
+
+    if (otherArticles.length > 0) {
+        html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">';
+        otherArticles.forEach(article => {
+            html += `
+                <a href="${article.url}" target="_blank" class="article-card block bg-white rounded-2xl overflow-hidden">
+                    <div class="h-48 bg-gray-300" style="background-image: url('${article.imageUrl}'); background-size: cover; background-position: center;"></div>
+                    <div class="p-6">
+                        <span class="text-sm font-semibold text-soft-gold mb-2 block">${article.category}</span>
+                        <h3 class="text-xl font-bold text-deep-night mb-3">${article.title}</h3>
+                        <p class="text-warm-gray mb-4 text-sm">${article.excerpt}</p>
+                        <div class="flex items-center text-xs text-warm-gray">
+                            <span>${formatDate(article.publishedDate)}</span>
+                            <span class="mx-2">•</span>
+                            <span>${article.readingTime} min de lecture</span>
+                        </div>
+                    </div>
+                </a>
+            `;
+        });
+        html += '</div>';
+    }
+    container.innerHTML = html;
+}
+
+    function renderKnowledgeArticles(articles) {
+        const container = document.getElementById('knowledge-articles-container');
+        if (!container) return;
+        if (articles.length === 0) {
+            container.innerHTML = '<p class="text-center text-warm-gray md:col-span-2">Aucun article pour le moment.</p>';
+            return;
+        }
+
+        let html = '';
+        articles.forEach(article => {
+            html += `
+                <div class="bg-white rounded-2xl p-8">
+                    <div class="flex items-center mb-6">
+                        <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas ${article.iconClass || 'fa-book'} text-soft-gold text-xl"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-deep-night">${article.title}</h3>
+                    </div>
+                    <div class="text-warm-gray space-y-4">
+                        ${article.content.map(paragraph => `<p>${paragraph}</p>`).join('')}
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+
+    // --- INITIALISATION & GESTION DE L'UI ---
+
+    function initializeCalculators() {
+        buyAmountInput.addEventListener('input', calculateBuyAmount);
+        cryptoSelectBuy.addEventListener('change', calculateBuyAmount);
+        sellAmountInput.addEventListener('input', calculateSellAmount);
+        cryptoSelectSell.addEventListener('change', calculateSellAmount);
+        calculateBuyAmount();
+        calculateSellAmount();
+    }
+
+    window.addEventListener('scroll', function() {
+        if (window.scrollY > 50) {
+            header.classList.add('header-blur', 'bg-white', 'bg-opacity-80', 'shadow-sm');
+        } else {
+            header.classList.remove('header-blur', 'bg-white', 'bg-opacity-80', 'shadow-sm');
+        }
+    });
+
+    document.querySelectorAll('.nav-link, #mobile-menu a').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            // Hide all sections
+            document.querySelectorAll('main > section').forEach(section => {
+                if (!section.classList.contains('hidden')) {
+                    section.classList.add('hidden');
+                }
+            });
+            
+            // Show the target section
+            const sectionId = this.getAttribute('data-section');
+            const targetSection = document.getElementById(sectionId);
+            if (targetSection) {
+                targetSection.classList.remove('hidden');
+            }
+
+            // Close mobile menu if open
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (mobileMenu.classList.contains('open')) {
+                mobileMenu.classList.remove('open');
+            }
+        });
+    });
+
+    const buyTab = document.getElementById('buy-tab');
+    const sellTab = document.getElementById('sell-tab');
+    buyTab.addEventListener('click', () => switchTab('buy'));
+    sellTab.addEventListener('click', () => switchTab('sell'));
+    
+    function switchTab(tabName) {
+        state.transaction.type = tabName;
+        const buyFlow = document.getElementById('buy-flow');
+        const sellFlow = document.getElementById('sell-flow');
+        if (tabName === 'buy') {
+            buyFlow.classList.remove('hidden'); sellFlow.classList.add('hidden');
+            buyTab.classList.add('tab-active', 'text-deep-night'); buyTab.classList.remove('text-warm-gray');
+            sellTab.classList.remove('tab-active', 'text-deep-night'); sellTab.classList.add('text-warm-gray');
+        } else {
+            sellFlow.classList.remove('hidden'); buyFlow.classList.add('hidden');
+            sellTab.classList.add('tab-active', 'text-deep-night'); sellTab.classList.remove('text-warm-gray');
+            buyTab.classList.remove('tab-active', 'text-deep-night'); buyTab.classList.add('text-warm-gray');
+        }
+    }
+
+    function setupStepNavigation(step1BtnId, backBtnId, step1Id, step2Id) {
+        const step1Btn = document.getElementById(step1BtnId);
+        const backBtn = document.getElementById(backBtnId);
+        const step1 = document.getElementById(step1Id);
+        const step2 = document.getElementById(step2Id);
+        if(step1Btn && backBtn) {
+            step1Btn.addEventListener('click', () => { step1.classList.add('hidden'); step2.classList.remove('hidden'); });
+            backBtn.addEventListener('click', () => { step2.classList.add('hidden'); step1.classList.remove('hidden'); });
+        }
+    }
+    setupStepNavigation('buy-step1-btn', 'back-buy-btn', 'step1-buy', 'step2-buy');
+    setupStepNavigation('sell-step1-btn', 'back-sell-btn', 'step1-sell', 'step2-sell');
+
+    document.querySelectorAll('.payment-option').forEach(option => {
+        option.addEventListener('click', function() {
+            this.closest('.grid').querySelectorAll('.payment-option').forEach(el => el.classList.remove('border-soft-gold', 'border-2'));
+            this.classList.add('border-soft-gold', 'border-2');
+            state.transaction.paymentMethod = this.dataset.payment;
+        });
+    });
+
+    initiateBuyBtn.addEventListener('click', handleInitiateTransaction);
+    initiateSellBtn.addEventListener('click', handleInitiateTransaction);
+
+    const mobileMenuButton = document.getElementById('mobile-menu-button');
+    const closeMenuButton = document.getElementById('close-menu');
+    const mobileMenu = document.getElementById('mobile-menu');
+    mobileMenuButton.addEventListener('click', () => mobileMenu.classList.add('open'));
+    closeMenuButton.addEventListener('click', () => mobileMenu.classList.remove('open'));
+
+    const testimonialsContainer = document.getElementById('testimonials-container');
+    if (testimonialsContainer) {
+        const testimonialPrev = document.getElementById('testimonial-prev');
+        const testimonialNext = document.getElementById('testimonial-next');
+        let currentTestimonial = 0;
+        const testimonialCount = testimonialsContainer.children.length;
+        testimonialNext.addEventListener('click', () => {
+            currentTestimonial = (currentTestimonial + 1) % testimonialCount;
+            testimonialsContainer.style.transform = `translateX(-${currentTestimonial * 100}%)`;
+        });
+        testimonialPrev.addEventListener('click', () => {
+            currentTestimonial = (currentTestimonial - 1 + testimonialCount) % testimonialCount;
+            testimonialsContainer.style.transform = `translateX(-${currentTestimonial * 100}%)`;
+        });
+    }
+
+    const authModal = document.getElementById('auth-modal');
+    if (authModal) {
+        document.querySelectorAll('#auth-button, #mobile-auth-button, #cta-button, .open-auth-modal').forEach(btn => btn.addEventListener('click', () => authModal.classList.remove('hidden')));
+        document.getElementById('close-modal').addEventListener('click', () => authModal.classList.add('hidden'));
+        authModal.addEventListener('click', e => { if (e.target === authModal) authModal.classList.add('hidden'); });
+        const signupTab = document.getElementById('signup-tab');
+        const loginTab = document.getElementById('login-tab');
+        signupTab.addEventListener('click', () => {
+            signupTab.classList.add('tab-active', 'text-deep-night');
+            loginTab.classList.remove('tab-active', 'text-deep-night');
+            document.getElementById('signup-form').classList.remove('hidden'); 
+            document.getElementById('login-form').classList.add('hidden');
+        });
+        loginTab.addEventListener('click', () => {
+            loginTab.classList.add('tab-active', 'text-deep-night');
+            signupTab.classList.remove('tab-active', 'text-deep-night');
+            document.getElementById('login-form').classList.remove('hidden'); 
+            document.getElementById('signup-form').classList.add('hidden');
+        });
+    }
+
+    // --- DÉMARRAGE DE L'APPLICATION ---
+    loadConfiguration();
+    loadPressArticles();
+    loadKnowledgeArticles();
+});

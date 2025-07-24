@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATEX - Échange de cryptomonnaies en Afrique</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'soft-cream': '#FBFBFB',
+                        'deep-night': '#0D1B3F',
+                        'soft-gold': '#D4AF37',
+                        'forest-green': '#228B22',
+                        'sienna': '#DC2626',
+                        'warm-gray': '#6B7280'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="font-inter bg-soft-cream min-h-screen flex flex-col">
+    <header class="fixed w-full z-50 py-4 px-6 transition-all duration-300" id="header">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center">
+                <h1 class="text-2xl font-bold text-deep-night">ATEX</h1>
+                <nav class="ml-12 hidden md:flex space-x-8">
+                    <a href="#exchange" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors" data-section="exchange">ATEX-CHANGE</a>
+                    <a href="#press" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors" data-section="press">ATEX-PRESSE</a>
+                    <a href="#knowledge" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors" data-section="knowledge">ATEX-SAVOIR</a>
+                </nav>
+            </div>
+            <div class="flex items-center">
+                <button id="auth-button" class="hidden md:block bg-soft-gold text-deep-night font-medium py-2 px-6 rounded-lg hover:bg-opacity-90 transition-all">
+                    Se Connecter / S'inscrire
+                </button>
+                <button id="mobile-menu-button" class="md:hidden text-deep-night">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div id="mobile-menu" class="mobile-menu fixed inset-0 z-60 bg-deep-night bg-opacity-95 backdrop-blur-sm md:hidden">
+        <div class="flex flex-col h-full p-8">
+            <div class="flex justify-between items-center mb-16">
+                <h1 class="text-2xl font-bold text-white">ATEX</h1>
+                <button id="close-menu" class="text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <nav class="flex flex-col space-y-8">
+                <a href="#exchange" class="nav-link text-white text-2xl font-medium py-3 flex items-center" data-section="exchange"><i class="fas fa-exchange-alt mr-4 text-soft-gold"></i>ATEX-CHANGE</a>
+                <a href="#press" class="nav-link text-white text-2xl font-medium py-3 flex items-center" data-section="press"><i class="fas fa-newspaper mr-4 text-soft-gold"></i>ATEX-PRESSE</a>
+                <a href="#knowledge" class="nav-link text-white text-2xl font-medium py-3 flex items-center" data-section="knowledge"><i class="fas fa-graduation-cap mr-4 text-soft-gold"></i>ATEX-SAVOIR</a>
+            </nav>
+            <div class="mt-auto">
+                <button id="mobile-auth-button" class="w-full bg-soft-gold text-deep-night font-medium py-3 px-6 rounded-lg text-lg">Se Connecter / S'inscrire</button>
+            </div>
+        </div>
+    </div>
+
+    <main class="flex-grow pt-20">
+        <section id="exchange" class="py-16 px-4">
+            <div class="max-w-7xl mx-auto">
+                <div class="text-center mb-16">
+                    <h1 class="text-4xl md:text-5xl font-bold text-deep-night max-w-3xl mx-auto mb-6">
+                        Échangez vos cryptos simplement, rapidement et en toute confiance
+                    </h1>
+                    <p class="text-xl text-warm-gray max-w-2xl mx-auto">
+                        La plateforme africaine d'échange de cryptomonnaies la plus intuitive et sécurisée
+                    </p>
+                </div>
+
+                <div class="max-w-2xl mx-auto bg-white rounded-2xl exchange-card p-6">
+                    <div class="flex mb-6 border-b border-gray-200">
+                        <button id="buy-tab" class="tab-active py-3 px-6 font-semibold text-deep-night text-center flex-1">
+                            Acheter des Cryptos
+                        </button>
+                        <button id="sell-tab" class="py-3 px-6 font-semibold text-warm-gray text-center flex-1">
+                            Vendre des Cryptos
+                        </button>
+                    </div>
+
+                    <div id="buy-flow">
+                        <div id="step1-buy" class="step-content">
+                            <div class="mb-5">
+                                <label class="block text-deep-night font-medium mb-2">Montant (FCFA)</label>
+                                <div class="relative">
+                                    <input type="number" id="buy-amount" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" placeholder="Entrez le montant">
+                                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 text-warm-gray">FCFA</div>
+                                </div>
+                            </div>
+
+                            <div class="mb-5">
+                                <label class="block text-deep-night font-medium mb-2">Crypto-monnaie</label>
+                                <select id="crypto-select" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
+                                    <option value="usdt">USDT TRC-20</option>
+                                    <option value="btc">Bitcoin (BTC)</option>
+                                    <option value="eth">Ethereum (ETH)</option>
+                                    <option value="ltc">Litecoin (LTC)</option>
+                                    <option value="xrp">Ripple (XRP)</option>
+                                </select>
+                            </div>
+
+                            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                                <div class="flex justify-between mb-2">
+                                    <span class="text-warm-gray">Vous recevrez ≈</span>
+                                    <span id="receive-amount" class="amount-display font-semibold text-deep-night">0.00 USDT</span>
+                                </div>
+                                <div class="text-sm text-warm-gray">(frais de 3% inclus)</div>
+                            </div>
+
+                            <button id="buy-step1-btn" class="w-full bg-forest-green text-white font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
+                                Acheter
+                            </button>
+                        </div>
+
+                        <div id="step2-buy" class="step-content hidden">
+                            <h2 class="text-2xl font-bold text-deep-night mb-6">Finaliser votre Achat</h2>
+                            
+                            <div class="mb-5">
+                                <label class="block text-deep-night font-medium mb-2">Votre adresse Wallet</label>
+                                <input type="text" id="buy-wallet-address" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" placeholder="Adresse de votre portefeuille">
+                            </div>
+                            
+                            <div class="mb-6">
+                                <label class="block text-deep-night font-medium mb-3">Moyen de paiement</label>
+                                <div id="buy-payment-methods" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Wave">
+                                        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                            <i class="fas fa-wave-square text-blue-500 text-xl"></i>
+                                        </div>
+                                        <span class="text-sm">Wave</span>
+                                    </div>
+                                    <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Orange Money">
+                                        <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                            <i class="fas fa-mobile-alt text-orange-500 text-xl"></i>
+                                        </div>
+                                        <span class="text-sm">Orange Money</span>
+                                    </div>
+                                    <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Moov Money">
+                                        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                            <i class="fas fa-sim-card text-purple-500 text-xl"></i>
+                                        </div>
+                                        <span class="text-sm">Moov Money</span>
+                                    </div>
+                                    <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Tmoney">
+                                        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                            <i class="fas fa-money-check-alt text-green-500 text-xl"></i>
+                                        </div>
+                                        <span class="text-sm">Tmoney</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex space-x-3">
+                                <button id="back-buy-btn" class="flex-1 bg-gray-200 text-deep-night font-medium py-3 rounded-lg hover:bg-gray-300 transition-all">
+                                    Retour
+                                </button>
+                                <button id="initiate-buy-btn" class="flex-1 bg-forest-green text-white font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
+                                    Initier l'achat via WhatsApp
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="sell-flow" class="hidden">
+                        <div id="step1-sell" class="step-content">
+                            <div class="mb-5">
+                                <label class="block text-deep-night font-medium mb-2">Montant (Crypto)</label>
+                                <div class="relative">
+                                    <input type="number" id="sell-amount" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" placeholder="Entrez le montant">
+                                    <div id="sell-currency-symbol" class="absolute inset-y-0 right-0 flex items-center pr-3 text-warm-gray">USDT</div>
+                                </div>
+                            </div>
+
+                            <div class="mb-5">
+                                <label class="block text-deep-night font-medium mb-2">Crypto-monnaie</label>
+                                <select id="crypto-select-sell" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
+                                    <option value="usdt">USDT TRC-20</option>
+                                    <option value="btc">Bitcoin (BTC)</option>
+                                    <option value="eth">Ethereum (ETH)</option>
+                                    <option value="ltc">Litecoin (LTC)</option>
+                                    <option value="xrp">Ripple (XRP)</option>
+                                </select>
+                            </div>
+
+                            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                                <div class="flex justify-between mb-2">
+                                    <span class="text-warm-gray">Vous recevrez ≈</span>
+                                    <span id="receive-amount-sell" class="amount-display font-semibold text-deep-night">0.00 FCFA</span>
+                                </div>
+                                <div class="text-sm text-warm-gray">(frais de 3% inclus)</div>
+                            </div>
+
+                            <button id="sell-step1-btn" class="w-full bg-sienna text-white font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
+                                Vendre
+                            </button>
+                        </div>
+
+                        <div id="step2-sell" class="step-content hidden">
+                            <h2 class="text-2xl font-bold text-deep-night mb-6">Finaliser votre Vente</h2>
+                            
+                            <div class="mb-5">
+                                <label class="block text-deep-night font-medium mb-2">Votre numéro de téléphone</label>
+                                <input type="text" id="sell-phone-number" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" placeholder="Entrez votre numéro">
+                            </div>
+                            
+                            <div class="mb-6">
+                                <label class="block text-deep-night font-medium mb-3">Moyen de réception</label>
+                                <div id="sell-payment-methods" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Wave">
+                                        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                            <i class="fas fa-wave-square text-blue-500 text-xl"></i>
+                                        </div>
+                                        <span class="text-sm">Wave</span>
+                                    </div>
+                                    <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Orange Money">
+                                        <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                            <i class="fas fa-mobile-alt text-orange-500 text-xl"></i>
+                                        </div>
+                                        <span class="text-sm">Orange Money</span>
+                                    </div>
+                                    <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Moov Money">
+                                        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                            <i class="fas fa-sim-card text-purple-500 text-xl"></i>
+                                        </div>
+                                        <span class="text-sm">Moov Money</span>
+                                    </div>
+                                    <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Tmoney">
+                                        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                            <i class="fas fa-money-check-alt text-green-500 text-xl"></i>
+                                        </div>
+                                        <span class="text-sm">Tmoney</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex space-x-3">
+                                <button id="back-sell-btn" class="flex-1 bg-gray-200 text-deep-night font-medium py-3 rounded-lg hover:bg-gray-300 transition-all">
+                                    Retour
+                                </button>
+                                <button id="initiate-sell-btn" class="flex-1 bg-sienna text-white font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
+                                    Initier la vente via WhatsApp
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="max-w-5xl mx-auto mt-24">
+                    <h2 class="text-3xl font-bold text-deep-night text-center mb-12">Pourquoi choisir ATEX ?</h2>
+                    
+                    <div class="grid md:grid-cols-3 gap-8">
+                        <div class="text-center p-6">
+                            <div class="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-5">
+                                <i class="fas fa-bolt text-soft-gold text-2xl"></i>
+                            </div>
+                            <h3 class="text-xl font-bold text-deep-night mb-3">Transactions rapides</h3>
+                            <p class="text-warm-gray">Échanges effectués en moins de 5 minutes grâce à notre réseau optimisé pour l'Afrique.</p>
+                        </div>
+                        
+                        <div class="text-center p-6">
+                            <div class="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-5">
+                                <i class="fas fa-shield-alt text-soft-gold text-2xl"></i>
+                            </div>
+                            <h3 class="text-xl font-bold text-deep-night mb-3">Sécurité Renforcée</h3>
+                            <p class="text-warm-gray">Technologie de pointe et vérification multi-niveaux pour protéger vos actifs.</p>
+                        </div>
+                        
+                        <div class="text-center p-6">
+                            <div class="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-5">
+                                <i class="fas fa-headset text-soft-gold text-2xl"></i>
+                            </div>
+                            <h3 class="text-xl font-bold text-deep-night mb-3">Assistance immédiate</h3>
+                            <p class="text-warm-gray">Support disponible 24/7 via WhatsApp pour répondre à toutes vos questions.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="max-w-5xl mx-auto mt-24">
+                    <h2 class="text-3xl font-bold text-deep-night text-center mb-12">Ce que nos utilisateurs disent de nous</h2>
+                    
+                    <div class="relative overflow-hidden">
+                        <div id="testimonials-container" class="flex transition-transform duration-500 ease-in-out">
+                            <div class="testimonial-card flex-shrink-0 w-full p-8 bg-white rounded-2xl">
+                                <div class="flex items-start mb-6">
+                                    <div class="w-16 h-16 rounded-full bg-gray-200 mr-4 overflow-hidden">
+                                        <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=128&h=128" alt="Fatou K." class="w-full h-full object-cover">
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xl font-bold text-deep-night">Fatou K.</h3>
+                                        <p class="text-warm-gray">Dakar, Sénégal</p>
+                                    </div>
+                                </div>
+                                <p class="text-lg text-warm-gray italic">"ATEX a révolutionné ma façon de gérer mes cryptomonnaies. Les transactions sont rapides et le support est toujours disponible quand j'ai besoin d'aide. Une plateforme vraiment adaptée à l'Afrique."</p>
+                                <div class="mt-4 flex text-soft-gold">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="testimonial-card flex-shrink-0 w-full p-8 bg-white rounded-2xl">
+                                <div class="flex items-start mb-6">
+                                    <div class="w-16 h-16 rounded-full bg-gray-200 mr-4 overflow-hidden">
+                                        <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=128&h=128" alt="Moussa D." class="w-full h-full object-cover">
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xl font-bold text-deep-night">Moussa D.</h3>
+                                        <p class="text-warm-gray">Abidjan, Côte d'Ivoire</p>
+                                    </div>
+                                </div>
+                                <p class="text-lg text-warm-gray italic">"J'ai essayé plusieurs plateformes avant ATEX, mais aucune n'était aussi intuitive et fiable. L'interface est élégante et les frais sont transparents. Je recommande à tous ceux qui veulent trader en Afrique."</p>
+                                <div class="mt-4 flex text-soft-gold">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="testimonial-card flex-shrink-0 w-full p-8 bg-white rounded-2xl">
+                                <div class="flex items-start mb-6">
+                                    <div class="w-16 h-16 rounded-full bg-gray-200 mr-4 overflow-hidden">
+                                        <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=128&h=128" alt="Aïssata B." class="w-full h-full object-cover">
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xl font-bold text-deep-night">Aïssata B.</h3>
+                                        <p class="text-warm-gray">Bamako, Mali</p>
+                                    </div>
+                                </div>
+                                <p class="text-lg text-warm-gray italic">"En tant que femme entrepreneure, j'apprécie la sécurité et la simplicité d'ATEX. Je peux gérer mes investissements en cryptos sans crainte, même sur mon téléphone. Un service vraiment adapté à nos besoins."</p>
+                                <div class="mt-4 flex text-soft-gold">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star-half-alt"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-center mt-8 space-x-2">
+                            <button id="testimonial-prev" class="w-10 h-10 rounded-full bg-deep-night text-white flex items-center justify-center">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button id="testimonial-next" class="w-10 h-10 rounded-full bg-soft-gold text-deep-night flex items-center justify-center">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="press" class="py-16 px-4 hidden">
+            <div class="max-w-7xl mx-auto">
+                <h2 class="text-3xl font-bold text-deep-night text-center mb-4">ATEX dans la presse</h2>
+                <p class="text-xl text-warm-gray text-center mb-16 max-w-2xl mx-auto">Découvrez les dernières actualités et analyses sur l'univers des cryptomonnaies en Afrique</p>
+                
+                <div id="press-articles-container" class="space-y-12">
+                    <div class="text-center py-8"><i class="fas fa-spinner fa-spin fa-2x text-soft-gold"></i></div>
+                </div>
+
+                <div class="text-center mt-12">
+                    <button class="border-2 border-soft-gold text-deep-night font-medium py-3 px-8 rounded-lg hover:bg-soft-gold hover:bg-opacity-10 transition-all">
+                        Voir plus d'articles
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section id="knowledge" class="py-16 px-4 hidden">
+            <div class="max-w-7xl mx-auto">
+                <h2 class="text-3xl font-bold text-deep-night text-center mb-4">ATEX-SAVOIR</h2>
+                <p class="text-xl text-warm-gray text-center mb-16 max-w-2xl mx-auto">Développez vos connaissances sur les cryptomonnaies et la blockchain</p>
+                
+                 <div id="knowledge-articles-container" class="grid md:grid-cols-2 gap-12">
+                    <div class="text-center py-8 md:col-span-2"><i class="fas fa-spinner fa-spin fa-2x text-soft-gold"></i></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="bg-deep-night py-16 px-4">
+        <div class="max-w-5xl mx-auto text-center">
+            <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">Prêt à vous lancer ?</h2>
+            <p class="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">Rejoignez des milliers d'utilisateurs qui échangent leurs cryptos en toute simplicité sur ATEX</p>
+            <button id="cta-button" class="bg-soft-gold text-deep-night font-bold py-4 px-10 rounded-lg text-lg hover:bg-opacity-90 transition-all">
+                Créer un compte gratuit
+            </button>
+        </div>
+    </div>
+
+    <footer class="bg-deep-night text-white pt-16 pb-8">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="grid md:grid-cols-4 gap-8 mb-12">
+                <div>
+                    <h3 class="text-xl font-bold mb-4">ATEX</h3>
+                    <p class="text-gray-300 mb-4">La plateforme africaine d'échange de cryptomonnaies la plus simple et sécurisée.</p>
+                    <div class="flex space-x-4">
+                        <a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">
+                            <i class="fab fa-twitter text-lg"></i>
+                        </a>
+                        <a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">
+                            <i class="fab fa-facebook text-lg"></i>
+                        </a>
+                        <a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">
+                            <i class="fab fa-instagram text-lg"></i>
+                        </a>
+                        <a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">
+                            <i class="fab fa-linkedin text-lg"></i>
+                        </a>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Navigation</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#exchange" class="nav-link text-gray-300 hover:text-soft-gold transition-colors">ATEX-CHANGE</a></li>
+                        <li><a href="#press" class="nav-link text-gray-300 hover:text-soft-gold transition-colors">ATEX-PRESSE</a></li>
+                        <li><a href="#knowledge" class="nav-link text-gray-300 hover:text-soft-gold transition-colors">ATEX-SAVOIR</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Légal</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">Conditions d'utilisation</a></li>
+                        <li><a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">Politique de confidentialité</a></li>
+                        <li><a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">Politique de cookies</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Contact</h3>
+                    <ul class="space-y-2">
+                        <li class="flex items-start">
+                            <i class="fas fa-envelope text-soft-gold mt-1 mr-3"></i>
+                            <span class="text-gray-300">support@atex-afrique.com</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-phone text-soft-gold mt-1 mr-3"></i>
+                            <span class="text-gray-300">+221 33 123 45 67</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fab fa-whatsapp text-soft-gold mt-1 mr-3"></i>
+                            <span class="text-gray-300">+221 77 123 45 67</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-700 pt-8">
+                <div class="flex flex-col md:flex-row justify-between items-center">
+                    <p class="text-gray-400">© 2025 ATEX. Tous droits réservés.</p>
+                    <p class="text-gray-500 text-sm mt-4 md:mt-0 max-w-2xl">
+                        Les cryptomonnaies présentent un risque élevé de perte en capital. ATEX ne fournit pas de conseils en investissement. Les performances passées ne préjugent pas des performances futures.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <div id="auth-modal" class="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4 hidden modal">
+        <div class="bg-white rounded-2xl w-full max-w-md">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-2xl font-bold text-deep-night">Rejoignez la communauté ATEX</h3>
+                    <button id="close-modal" class="text-warm-gray hover:text-deep-night">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="flex mt-6">
+                    <button id="signup-tab" class="tab-active py-2 px-4 font-semibold text-deep-night">S'inscrire</button>
+                    <button id="login-tab" class="py-2 px-4 font-semibold text-warm-gray">Se connecter</button>
+                </div>
+            </div>
+            
+            <div class="p-6">
+                <div class="flex space-x-4 mb-6">
+                    <button class="flex-1 bg-gray-100 text-deep-night py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors">
+                        <i class="fab fa-google mr-2"></i> Google
+                    </button>
+                    <button class="flex-1 bg-gray-100 text-deep-night py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors">
+                        <i class="fab fa-facebook mr-2"></i> Facebook
+                    </button>
+                </div>
+                
+                <div class="flex items-center my-6">
+                    <div class="flex-grow border-t border-gray-200"></div>
+                    <span class="mx-4 text-warm-gray">OU</span>
+                    <div class="flex-grow border-t border-gray-200"></div>
+                </div>
+                
+                <form id="signup-form">
+                    <div class="mb-4">
+                        <input type="text" placeholder="Nom d'utilisateur" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
+                    </div>
+                    <div class="mb-4">
+                        <input type="email" placeholder="Adresse e-mail" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
+                    </div>
+                    <div class="mb-6">
+                        <input type="password" placeholder="Mot de passe" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
+                    </div>
+                    <button class="w-full bg-soft-gold text-deep-night font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
+                        Créer mon compte
+                    </button>
+                </form>
+                
+                <form id="login-form" class="hidden">
+                    <div class="mb-4">
+                        <input type="email" placeholder="Adresse e-mail" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
+                    </div>
+                    <div class="mb-6">
+                        <input type="password" placeholder="Mot de passe" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
+                    </div>
+                    <button class="w-full bg-soft-gold text-deep-night font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
+                        Se connecter
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

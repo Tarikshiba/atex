@@ -1,0 +1,106 @@
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #FBFBFB;
+    color: #0D1B3F;
+    overflow-x: hidden;
+}
+
+.header-blur {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.tab-active {
+    position: relative;
+}
+
+.tab-active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: #D4AF37;
+}
+
+.exchange-card {
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 10px 30px rgba(13, 27, 63, 0.08);
+}
+
+.exchange-card:hover {
+    box-shadow: 0 15px 40px rgba(13, 27, 63, 0.12);
+}
+
+.payment-option {
+    transition: all 0.2s ease;
+}
+
+.payment-option:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.modal {
+    transition: opacity 0.3s ease-in-out;
+}
+
+.article-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.article-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+}
+
+.knowledge-gradient {
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 70%, rgba(0,0,0,0));
+}
+
+.step-transition {
+    animation: fadeIn 0.4s ease forwards;
+}
+
+.testimonial-card {
+    box-shadow: 0 10px 30px rgba(13, 27, 63, 0.1);
+}
+
+.mobile-menu {
+    transform: translateX(100%);
+    transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    z-index: 60; /* Correction du z-index */
+}
+
+.mobile-menu.open {
+    transform: translateX(0);
+}
+
+.featured-article {
+    height: 400px;
+}
+
+.amount-display {
+    transition: all 0.3s ease;
+}
+
+.amount-display.active {
+    transform: scale(1.05);
+    color: #0D1B3F;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.animate-pulse {
+    animation: pulse 0.5s ease;
+}
