@@ -30,25 +30,31 @@
 </head>
 <body class="font-inter bg-soft-cream min-h-screen flex flex-col">
     <header class="fixed w-full z-50 py-4 px-6 transition-all duration-300" id="header">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <div class="flex items-center">
-                <h1 class="text-2xl font-bold text-deep-night">ATEX</h1>
-                <nav class="ml-12 hidden md:flex space-x-8">
-                    <a href="#exchange" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors" data-section="exchange">ATEX-CHANGE</a>
-                    <a href="#press" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors" data-section="press">ATEX-PRESSE</a>
-                    <a href="#knowledge" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors" data-section="knowledge">ATEX-SAVOIR</a>
-                </nav>
-            </div>
-            <div class="flex items-center">
-                <button id="auth-button" class="hidden md:block bg-soft-gold text-deep-night font-medium py-2 px-6 rounded-lg hover:bg-opacity-90 transition-all">
-                    Se Connecter / S'inscrire
-                </button>
-                <button id="mobile-menu-button" class="md:hidden text-deep-night">
-                    <i class="fas fa-bars text-xl"></i>
-                </button>
-            </div>
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+        <div class="flex items-center">
+            <!-- Logo seul avec taille responsive -->
+            <a href="index.html" class="flex items-center">
+                <img src="images/logo.png" 
+                     alt="ATEX Logo"
+                     class="logo-header">
+            </a>
+            
+            <nav class="ml-8 sm:ml-12 hidden md:flex space-x-6 lg:space-x-8">
+                <a href="#exchange" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors" data-section="exchange">ATEX-CHANGE</a>
+                <a href="#press" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors" data-section="press">ATEX-PRESSE</a>
+                <a href="#knowledge" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors" data-section="knowledge">ATEX-SAVOIR</a>
+            </nav>
         </div>
-    </header>
+        <div class="flex items-center">
+            <button id="auth-button" class="hidden md:block bg-soft-gold text-deep-night font-medium py-2 px-6 rounded-lg hover:bg-opacity-90 transition-all">
+                Se Connecter / S'inscrire
+            </button>
+            <button id="mobile-menu-button" class="md:hidden text-deep-night">
+                <i class="fas fa-bars text-xl"></i>
+            </button>
+        </div>
+    </div>
+</header>
 
     <div id="mobile-menu" class="mobile-menu fixed inset-0 z-60 bg-deep-night bg-opacity-95 backdrop-blur-sm md:hidden">
         <div class="flex flex-col h-full p-8">
@@ -109,6 +115,8 @@
                                     <option value="eth">Ethereum (ETH)</option>
                                     <option value="ltc">Litecoin (LTC)</option>
                                     <option value="xrp">Ripple (XRP)</option>
+                                    <option value="trx">Tron (TRX)</option>
+                                    <option value="bnb">Binance Coin (BNB)</option>
                                 </select>
                             </div>
 
@@ -138,27 +146,27 @@
                                 <div id="buy-payment-methods" class="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Wave">
                                         <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                            <i class="fas fa-wave-square text-blue-500 text-xl"></i>
+                                            <img src="images/wave.jpg" alt="Wave Logo" class="h-full w-full object-contain">
                                         </div>
                                         <span class="text-sm">Wave</span>
                                     </div>
                                     <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Orange Money">
                                         <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                            <i class="fas fa-mobile-alt text-orange-500 text-xl"></i>
+                                            <img src="images/orange-money.jpg" alt="Orange Money Logo" class="h-full w-full object-contain">
                                         </div>
                                         <span class="text-sm">Orange Money</span>
                                     </div>
                                     <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Moov Money">
                                         <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                            <i class="fas fa-sim-card text-purple-500 text-xl"></i>
+                                            <img src="images/moov.jpg" alt="Moov Money Logo" class="h-full w-full object-contain">
                                         </div>
                                         <span class="text-sm">Moov Money</span>
                                     </div>
-                                    <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Tmoney">
+                                    <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Yas">
                                         <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                            <i class="fas fa-money-check-alt text-green-500 text-xl"></i>
+                                            <img src="images/Yas.jpg" alt="Yas Logo" class="h-full w-full object-contain">
                                         </div>
-                                        <span class="text-sm">Tmoney</span>
+                                        <span class="text-sm">Yas</span>
                                     </div>
                                 </div>
                             </div>
@@ -168,7 +176,7 @@
                                     Retour
                                 </button>
                                 <button id="initiate-buy-btn" class="flex-1 bg-forest-green text-white font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
-                                    Initier l'achat via WhatsApp
+                                   Procéder au paiement
                                 </button>
                             </div>
                         </div>
@@ -192,6 +200,8 @@
                                     <option value="eth">Ethereum (ETH)</option>
                                     <option value="ltc">Litecoin (LTC)</option>
                                     <option value="xrp">Ripple (XRP)</option>
+                                    <option value="trx">Tron (TRX)</option>
+                                    <option value="bnb">Binance Coin (BNB)</option>
                                 </select>
                             </div>
 
@@ -221,25 +231,25 @@
                                 <div id="sell-payment-methods" class="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Wave">
                                         <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                            <i class="fas fa-wave-square text-blue-500 text-xl"></i>
+                                            <img src="images/wave.jpg" alt="Wave Logo" class="h-full w-full object-contain">
                                         </div>
                                         <span class="text-sm">Wave</span>
                                     </div>
                                     <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Orange Money">
                                         <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                            <i class="fas fa-mobile-alt text-orange-500 text-xl"></i>
+                                            <img src="images/orange-money.jpg" alt="Orange Money Logo" class="h-full w-full object-contain">
                                         </div>
                                         <span class="text-sm">Orange Money</span>
                                     </div>
                                     <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Moov Money">
                                         <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                            <i class="fas fa-sim-card text-purple-500 text-xl"></i>
+                                            <img src="images/moov.jpg" alt="Moov Money Logo" class="h-full w-full object-contain">
                                         </div>
                                         <span class="text-sm">Moov Money</span>
                                     </div>
                                     <div class="payment-option bg-white border border-gray-200 rounded-xl p-4 text-center cursor-pointer" data-payment="Tmoney">
                                         <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                            <i class="fas fa-money-check-alt text-green-500 text-xl"></i>
+                                            <img src="images/Yas.jpg" alt="Tmoney Logo" class="h-full w-full object-contain">
                                         </div>
                                         <span class="text-sm">Tmoney</span>
                                     </div>
@@ -250,8 +260,8 @@
                                 <button id="back-sell-btn" class="flex-1 bg-gray-200 text-deep-night font-medium py-3 rounded-lg hover:bg-gray-300 transition-all">
                                     Retour
                                 </button>
-                                <button id="initiate-sell-btn" class="flex-1 bg-sienna text-white font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
-                                    Initier la vente via WhatsApp
+                               <button id="initiate-sell-btn" class="flex-1 bg-sienna text-white font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
+                                    Procéder au paiement
                                 </button>
                             </div>
                         </div>
@@ -339,7 +349,7 @@
                                         <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=128&h=128" alt="Aïssata B." class="w-full h-full object-cover">
                                     </div>
                                     <div>
-                                        <h3 class="text-xl font-bold text-deep-night">Aïssata B.</h3>
+                                        <h3 class="text-xl font-bold text-deep-night">Aïssata Baldé.</h3>
                                         <p class="text-warm-gray">Bamako, Mali</p>
                                     </div>
                                 </div>
@@ -413,17 +423,17 @@
                     <h3 class="text-xl font-bold mb-4">ATEX</h3>
                     <p class="text-gray-300 mb-4">La plateforme africaine d'échange de cryptomonnaies la plus simple et sécurisée.</p>
                     <div class="flex space-x-4">
-                        <a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">
+                        <a href="https://x.com/atexchangeorg?s=21" target="_blank" class="text-gray-300 hover:text-soft-gold transition-colors">
                             <i class="fab fa-twitter text-lg"></i>
                         </a>
                         <a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">
                             <i class="fab fa-facebook text-lg"></i>
                         </a>
-                        <a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">
+                        <a href="https://www.instagram.com/atex_orginal?igsh=MWJyZWlsN2Nhd2hxaA%3D%3D&utm_source=qr" target="_blank" class="text-gray-300 hover:text-soft-gold transition-colors">
                             <i class="fab fa-instagram text-lg"></i>
                         </a>
-                        <a href="#" class="text-gray-300 hover:text-soft-gold transition-colors">
-                            <i class="fab fa-linkedin text-lg"></i>
+                        <a href="https://www.tiktok.com/@atexoriginal?_t=ZN-8yDyeoKbDja&_r=1" target="_blank" class="text-gray-300 hover:text-soft-gold transition-colors">
+                            <i class="fab fa-tiktok text-lg"></i>
                         </a>
                     </div>
                 </div>

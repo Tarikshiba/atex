@@ -68,7 +68,16 @@ document.addEventListener('DOMContentLoaded', async function() {
         const amountFCFA = parseFloat(buyAmountInput.value) || 0;
         const crypto = cryptoSelectBuy.value;
         const finalCryptoAmount = (amountFCFA * (1 - state.config.feePercentage / 100)) * state.config.rates.buy[crypto];
-        let precision = crypto === 'btc' ? 8 : (crypto === 'eth' ? 6 : 4);
+       let precision;
+        if (crypto === 'btc') {
+            precision = 8;
+        } else if (crypto === 'eth' || crypto === 'bnb') { // Ajout de bnb avec 6 décimales
+            precision = 6;
+        } else if (crypto === 'trx') { // Ajout de trx avec 4 décimales
+            precision = 4;
+        } else {
+            precision = 4; // Par défaut pour USDT, LTC, XRP, etc.
+        }
         receiveAmountDisplay.textContent = `${finalCryptoAmount.toFixed(precision)} ${crypto.toUpperCase()}`;
         state.transaction.amountToSend = amountFCFA;
         state.transaction.amountToReceive = finalCryptoAmount;
@@ -93,7 +102,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     async function handleInitiateTransaction() {
         const currentType = state.transaction.type;
         const button = currentType === 'buy' ? initiateBuyBtn : initiateSellBtn;
-        const originalButtonText = button.innerHTML;
+        const originalButtonText = "Procéder au paiement";
 
         if (!state.transaction.amountToSend || state.transaction.amountToSend <= 0) {
             alert("Veuillez entrer un montant valide et supérieur à zéro.");
