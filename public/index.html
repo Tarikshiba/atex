@@ -104,6 +104,7 @@
                                 <div class="relative">
                                     <input type="number" id="buy-amount" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" placeholder="Entrez le montant">
                                     <div class="absolute inset-y-0 right-0 flex items-center pr-3 text-warm-gray">FCFA</div>
+                                    <div id="buy-amount-error" class="text-red-500 text-sm mt-1 h-4"></div>
                                 </div>
                             </div>
 
@@ -139,6 +140,7 @@
                             <div class="mb-5">
                                 <label class="block text-deep-night font-medium mb-2">Votre adresse Wallet</label>
                                 <input type="text" id="buy-wallet-address" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" placeholder="Adresse de votre portefeuille">
+                                <div id="buy-wallet-error" class="text-red-500 text-sm mt-1 h-4"></div>
                             </div>
                             
                             <div class="mb-6">
@@ -189,6 +191,7 @@
                                 <div class="relative">
                                     <input type="number" id="sell-amount" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" placeholder="Entrez le montant">
                                     <div id="sell-currency-symbol" class="absolute inset-y-0 right-0 flex items-center pr-3 text-warm-gray">USDT</div>
+                                    <div id="sell-amount-error" class="text-red-500 text-sm mt-1 h-4"></div>
                                 </div>
                             </div>
 
@@ -224,6 +227,7 @@
                             <div class="mb-5">
                                 <label class="block text-deep-night font-medium mb-2">Votre numéro de téléphone</label>
                                 <input type="text" id="sell-phone-number" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" placeholder="Entrez votre numéro">
+                                <div id="sell-phone-error" class="text-red-500 text-sm mt-1 h-4"></div>
                             </div>
                             
                             <div class="mb-6">

@@ -18,10 +18,56 @@ document.addEventListener('DOMContentLoaded', async function() {
     const initiateBuyBtn = document.getElementById('initiate-buy-btn');
     const initiateSellBtn = document.getElementById('initiate-sell-btn');
     const header = document.getElementById('header');
+    
+    // === NOUVELLE SECTION : VALIDATION DES FORMULAIRES ===
+    const errorMessages = {
+        amount: "Veuillez entrer un montant valide.",
+        wallet: "Adresse invalide (trop courte).",
+        phone: "Numéro invalide."
+    };
+
+    function showError(elementId, message) {
+        const errorElement = document.getElementById(elementId);
+        if (errorElement) errorElement.textContent = message;
+    }
+
+    function hideError(elementId) {
+        const errorElement = document.getElementById(elementId);
+        if (errorElement) errorElement.textContent = '';
+    }
+
+    function validateAmount(inputElement, errorElementId) {
+        const value = parseFloat(inputElement.value);
+        if (inputElement.value.trim() === '' || isNaN(value) || value <= 0) {
+            showError(errorElementId, errorMessages.amount);
+            return false;
+        }
+        hideError(errorElementId);
+        return true;
+    }
+
+    function validateWalletAddress(inputElement, errorElementId) {
+        if (inputElement.value.trim().length > 0 && inputElement.value.trim().length < 15) {
+            showError(errorElementId, errorMessages.wallet);
+            return false;
+        }
+        hideError(errorElementId);
+        return true;
+    }
+
+    function validatePhoneNumber(inputElement, errorElementId) {
+        const phoneRegex = /^\+?[0-9]{8,}$/;
+        if (inputElement.value.trim().length > 0 && !phoneRegex.test(inputElement.value.trim())) {
+            showError(errorElementId, errorMessages.phone);
+            return false;
+        }
+        hideError(errorElementId);
+        return true;
+    }
+    // =======================================================
 
     // --- LOGIQUE PRINCIPALE ---
 
-    // 1. Fonctions de chargement des données
     async function loadConfiguration() {
         try {
             const response = await fetch('/api/config');
@@ -57,21 +103,16 @@ document.addEventListener('DOMContentLoaded', async function() {
             document.getElementById('knowledge-articles-container').innerHTML = `<div class="p-4 text-center bg-red-100 text-red-700 rounded-lg">Impossible de charger les articles.</div>`;
         }
     }
-
-    // 2. Fonctions de calcul
+    
     function calculateBuyAmount() {
         if (!state.config.rates) return;
         const amountFCFA = parseFloat(buyAmountInput.value) || 0;
         const crypto = cryptoSelectBuy.value;
         const finalCryptoAmount = (amountFCFA * (1 - state.config.feePercentage / 100)) * state.config.rates.buy[crypto];
         let precision;
-        if (crypto === 'btc') {
-            precision = 8;
-        } else if (crypto === 'eth' || crypto === 'bnb') {
-            precision = 6;
-        } else {
-            precision = 4;
-        }
+        if (crypto === 'btc') precision = 8;
+        else if (crypto === 'eth' || crypto === 'bnb') precision = 6;
+        else precision = 4;
         receiveAmountDisplay.textContent = `${finalCryptoAmount.toFixed(precision)} ${crypto.toUpperCase()}`;
         state.transaction.amountToSend = amountFCFA;
         state.transaction.amountToReceive = finalCryptoAmount;
@@ -92,35 +133,37 @@ document.addEventListener('DOMContentLoaded', async function() {
         state.transaction.currencyTo = 'FCFA';
     }
 
-    // 3. Logique d'initiation de transaction
     async function handleInitiateTransaction() {
         const currentType = state.transaction.type;
         const button = currentType === 'buy' ? initiateBuyBtn : initiateSellBtn;
-        const originalButtonText = "Procéder au paiement";
-
-        if (!state.transaction.amountToSend || state.transaction.amountToSend <= 0) {
-            alert("Veuillez entrer un montant valide et supérieur à zéro.");
-            return;
-        }
-
+        
+        let isFormValid = false;
         if (currentType === 'buy') {
-            state.transaction.walletAddress = buyWalletAddressInput.value;
-            if (!state.transaction.walletAddress || !state.transaction.paymentMethod) {
-                alert("Veuillez entrer votre adresse de portefeuille et choisir un moyen de paiement.");
-                return;
+            const isAmountValid = validateAmount(buyAmountInput, 'buy-amount-error');
+            const isWalletValid = validateWalletAddress(buyWalletAddressInput, 'buy-wallet-error');
+            if (isAmountValid && isWalletValid && state.transaction.paymentMethod) {
+                isFormValid = true;
+            } else if (!state.transaction.paymentMethod) {
+                alert("Veuillez choisir un moyen de paiement.");
             }
-        } else {
-            state.transaction.phoneNumber = sellPhoneNumberInput.value;
-             if (!state.transaction.phoneNumber || !state.transaction.paymentMethod) {
-                alert("Veuillez entrer votre numéro de téléphone et choisir un moyen de réception.");
-                return;
+        } else { // type === 'sell'
+            const isAmountValid = validateAmount(sellAmountInput, 'sell-amount-error');
+            const isPhoneValid = validatePhoneNumber(sellPhoneNumberInput, 'sell-phone-error');
+            if (isAmountValid && isPhoneValid && state.transaction.paymentMethod) {
+                isFormValid = true;
+            } else if (!state.transaction.paymentMethod) {
+                 alert("Veuillez choisir un moyen de réception.");
             }
         }
 
+        if (!isFormValid) return;
+
+        const originalButtonText = "Procéder au paiement";
         button.disabled = true;
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Initialisation...';
-
         try {
+            state.transaction.walletAddress = buyWalletAddressInput.value;
+            state.transaction.phoneNumber = sellPhoneNumberInput.value;
             const response = await fetch('/api/initiate-transaction', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -141,8 +184,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // === FONCTIONS DE RENDU ADAPTÉES POUR SANITY ===
-
     function renderPressArticles(articles) {
         const container = document.getElementById('press-articles-container');
         if (!container) return;
@@ -162,7 +203,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         const featuredArticle = articles[0];
         const otherArticles = articles.slice(1);
-
         let html = `
             <a href="${featuredArticle.url}" target="_blank" rel="noopener noreferrer" class="featured-article block bg-white rounded-2xl overflow-hidden relative" style="background-image: url('${featuredArticle.imageUrl || ''}'); background-size: cover; background-position: center;">
                 <div class="absolute inset-0 bg-gradient-to-t from-deep-night to-transparent opacity-80 z-10"></div>
@@ -177,7 +217,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 </div>
             </a>
         `;
-
         if (otherArticles.length > 0) {
             html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">';
             otherArticles.forEach(article => {
@@ -220,7 +259,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 })
                 .join('');
         };
-
         let html = '';
         articles.forEach(article => {
             html += `
@@ -241,8 +279,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // --- INITIALISATION & GESTION DE L'UI ---
-
     function initializeCalculators() {
+        buyAmountInput.addEventListener('input', () => validateAmount(buyAmountInput, 'buy-amount-error'));
+        buyWalletAddressInput.addEventListener('input', () => validateWalletAddress(buyWalletAddressInput, 'buy-wallet-error'));
+        sellAmountInput.addEventListener('input', () => validateAmount(sellAmountInput, 'sell-amount-error'));
+        sellPhoneNumberInput.addEventListener('input', () => validatePhoneNumber(sellPhoneNumberInput, 'sell-phone-error'));
+        
         buyAmountInput.addEventListener('input', calculateBuyAmount);
         cryptoSelectBuy.addEventListener('change', calculateBuyAmount);
         sellAmountInput.addEventListener('input', calculateSellAmount);
