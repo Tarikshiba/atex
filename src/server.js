@@ -3,7 +3,8 @@ const express = require('express');
 const admin = require('firebase-admin');
 const cors = require('cors');
 const path = require('path');
-const sanityClient = require('@sanity/client');
+// MODIFICATION ICI : On importe "createClient" spécifiquement
+const { createClient } = require('@sanity/client');
 require('dotenv').config();
 
 // --- CONFIGURATION DE FIREBASE (pour les transactions) ---
@@ -14,10 +15,11 @@ admin.initializeApp({
 const db = admin.firestore();
 
 // --- NOUVELLE CONFIGURATION DE SANITY (pour le contenu) ---
-const client = sanityClient({
+// MODIFICATION ICI : On utilise "createClient"
+const client = createClient({
   projectId: process.env.SANITY_PROJECT_ID,
   dataset: 'production',
-  useCdn: true, 
+  useCdn: true,
   apiVersion: '2024-07-25',
 });
 
