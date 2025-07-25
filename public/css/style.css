@@ -145,3 +145,24 @@ header .flex.items-center nav {
 .animate-pulse {
     animation: pulse 0.5s ease;
 }
+
+/* Ajout pour les notifications "toast" */
+.toast {
+    transition: all 0.5s ease-in-out;
+    opacity: 0;
+    transform: translateX(100%);
+}
+.toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+
+/* Ajout pour l'accordéon FAQ */
+.faq-question.active i {
+    transform: rotate(180deg);
+}
+
+.faq-answer.open {
+    max-height: 20rem; /* 320px, assez grand pour la plupart des réponses */
+}

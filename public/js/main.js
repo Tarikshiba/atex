@@ -19,7 +19,29 @@ document.addEventListener('DOMContentLoaded', async function() {
     const initiateSellBtn = document.getElementById('initiate-sell-btn');
     const header = document.getElementById('header');
     
-    // === NOUVELLE SECTION : VALIDATION DES FORMULAIRES ===
+    // === FONCTION POUR LES NOTIFICATIONS ===
+    function showNotification(message, type = 'error') {
+        const container = document.getElementById('notification-container');
+        if (!container) return;
+
+        const notif = document.createElement('div');
+        const bgColor = type === 'error' ? 'bg-red-500' : 'bg-green-500';
+        notif.className = `toast text-white py-2 px-4 rounded-lg shadow-lg ${bgColor}`;
+        notif.textContent = message;
+        
+        container.appendChild(notif);
+
+        setTimeout(() => {
+            notif.classList.add('show');
+        }, 10);
+
+        setTimeout(() => {
+            notif.classList.remove('show');
+            notif.addEventListener('transitionend', () => notif.remove());
+        }, 4000);
+    }
+    
+    // === SECTION VALIDATION DES FORMULAIRES ===
     const errorMessages = {
         amount: "Veuillez entrer un montant valide.",
         wallet: "Adresse invalide (trop courte).",
@@ -64,9 +86,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         hideError(errorElementId);
         return true;
     }
-    // =======================================================
-
-    // --- LOGIQUE PRINCIPALE ---
+    
+    // --- LOGIQUE DE CHARGEMENT DES DONNÉES ---
 
     async function loadConfiguration() {
         try {
@@ -103,6 +124,54 @@ document.addEventListener('DOMContentLoaded', async function() {
             document.getElementById('knowledge-articles-container').innerHTML = `<div class="p-4 text-center bg-red-100 text-red-700 rounded-lg">Impossible de charger les articles.</div>`;
         }
     }
+
+    async function loadTestimonials() {
+        try {
+            const response = await fetch('/api/testimonials');
+            if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+            const testimonials = await response.json();
+            renderTestimonials(testimonials);
+        } catch (error) {
+            console.error("Impossible de charger les témoignages:", error);
+            document.getElementById('testimonials-container').innerHTML = `<div class="w-full p-4 text-center bg-red-100 text-red-700 rounded-lg">Impossible de charger les témoignages.</div>`;
+        }
+    }
+
+    // --- LOGIQUE DE RENDU (RENDER) ---
+
+    function renderTestimonials(testimonials) {
+        const container = document.getElementById('testimonials-container');
+        if (!container) return;
+        
+        if (!testimonials || testimonials.length === 0) {
+            container.innerHTML = '<p class="w-full text-center text-warm-gray">Aucun témoignage pour le moment.</p>';
+            return;
+        }
+
+        let html = '';
+        testimonials.forEach(testimonial => {
+            const imageUrl = testimonial.imageUrl || 'images/default-avatar.png';
+            html += `
+                <div class="testimonial-card flex-shrink-0 w-full p-8 bg-white rounded-2xl">
+                    <div class="flex items-start mb-6">
+                        <div class="w-16 h-16 rounded-full bg-gray-200 mr-4 overflow-hidden">
+                            <img src="${imageUrl}" alt="${testimonial.name}" class="w-full h-full object-cover">
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-deep-night">${testimonial.name}</h3>
+                            <p class="text-warm-gray">${testimonial.location}</p>
+                        </div>
+                    </div>
+                    <p class="text-lg text-warm-gray italic">"${testimonial.quote}"</p>
+                    <div class="mt-4 flex text-soft-gold">
+                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+        initializeTestimonialCarousel();
+    }
     
     function calculateBuyAmount() {
         if (!state.config.rates) return;
@@ -137,47 +206,58 @@ document.addEventListener('DOMContentLoaded', async function() {
         const currentType = state.transaction.type;
         const button = currentType === 'buy' ? initiateBuyBtn : initiateSellBtn;
         
-        let isFormValid = false;
+        let isFormValid = true;
+        let errorMessage = '';
+
         if (currentType === 'buy') {
             const isAmountValid = validateAmount(buyAmountInput, 'buy-amount-error');
             const isWalletValid = validateWalletAddress(buyWalletAddressInput, 'buy-wallet-error');
-            if (isAmountValid && isWalletValid && state.transaction.paymentMethod) {
-                isFormValid = true;
+            if (!isAmountValid || !isWalletValid) {
+                isFormValid = false;
+                errorMessage = 'Veuillez corriger les erreurs dans le formulaire.';
             } else if (!state.transaction.paymentMethod) {
-                alert("Veuillez choisir un moyen de paiement.");
+                isFormValid = false;
+                errorMessage = 'Veuillez choisir un moyen de paiement.';
             }
-        } else { // type === 'sell'
+        } else {
             const isAmountValid = validateAmount(sellAmountInput, 'sell-amount-error');
             const isPhoneValid = validatePhoneNumber(sellPhoneNumberInput, 'sell-phone-error');
-            if (isAmountValid && isPhoneValid && state.transaction.paymentMethod) {
-                isFormValid = true;
+            if (!isAmountValid || !isPhoneValid) {
+                isFormValid = false;
+                errorMessage = 'Veuillez corriger les erreurs dans le formulaire.';
             } else if (!state.transaction.paymentMethod) {
-                 alert("Veuillez choisir un moyen de réception.");
+                isFormValid = false;
+                errorMessage = 'Veuillez choisir un moyen de réception.';
             }
         }
 
-        if (!isFormValid) return;
+        if (!isFormValid) {
+            showNotification(errorMessage);
+            return;
+        }
 
-        const originalButtonText = "Procéder au paiement";
+        const originalButtonText = button.innerHTML;
         button.disabled = true;
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Initialisation...';
+        
         try {
             state.transaction.walletAddress = buyWalletAddressInput.value;
             state.transaction.phoneNumber = sellPhoneNumberInput.value;
+            
             const response = await fetch('/api/initiate-transaction', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(state.transaction)
             });
-            if (!response.ok) {
-                const errorResult = await response.json();
-                throw new Error(errorResult.message || 'La réponse du serveur n\'est pas OK');
-            }
+
             const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.message || 'La réponse du serveur n\'est pas OK');
+            }
             window.location.href = result.whatsappUrl;
         } catch (error) {
             console.error('Erreur lors de l\'initiation de la transaction:', error);
-            alert(`Une erreur est survenue : ${error.message}`);
+            showNotification(`Une erreur est survenue : ${error.message}`);
         } finally {
             button.disabled = false;
             button.innerHTML = originalButtonText;
@@ -195,9 +275,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         const formatDate = (dateString) => {
             if (!dateString) return 'Date non disponible';
             return new Date(dateString).toLocaleDateString('fr-FR', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
+                year: 'numeric', month: 'long', day: 'numeric'
             });
         };
 
@@ -294,30 +372,21 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     window.addEventListener('scroll', function() {
-        if (window.scrollY > 50) {
-            header.classList.add('header-blur', 'bg-white', 'bg-opacity-80', 'shadow-sm');
-        } else {
-            header.classList.remove('header-blur', 'bg-white', 'bg-opacity-80', 'shadow-sm');
-        }
+        if (window.scrollY > 50) header.classList.add('header-blur', 'bg-white', 'bg-opacity-80', 'shadow-sm');
+        else header.classList.remove('header-blur', 'bg-white', 'bg-opacity-80', 'shadow-sm');
     });
 
     document.querySelectorAll('.nav-link, #mobile-menu a').forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             document.querySelectorAll('main > section').forEach(section => {
-                if (!section.classList.contains('hidden')) {
-                    section.classList.add('hidden');
-                }
+                if (!section.classList.contains('hidden')) section.classList.add('hidden');
             });
             const sectionId = this.dataset.section;
             const targetSection = document.getElementById(sectionId);
-            if (targetSection) {
-                targetSection.classList.remove('hidden');
-            }
+            if (targetSection) targetSection.classList.remove('hidden');
             const mobileMenu = document.getElementById('mobile-menu');
-            if (mobileMenu.classList.contains('open')) {
-                mobileMenu.classList.remove('open');
-            }
+            if (mobileMenu.classList.contains('open')) mobileMenu.classList.remove('open');
         });
     });
 
@@ -371,12 +440,24 @@ document.addEventListener('DOMContentLoaded', async function() {
     mobileMenuButton.addEventListener('click', () => mobileMenu.classList.add('open'));
     closeMenuButton.addEventListener('click', () => mobileMenu.classList.remove('open'));
 
-    const testimonialsContainer = document.getElementById('testimonials-container');
-    if (testimonialsContainer) {
+    function initializeTestimonialCarousel() {
+        const testimonialsContainer = document.getElementById('testimonials-container');
         const testimonialPrev = document.getElementById('testimonial-prev');
         const testimonialNext = document.getElementById('testimonial-next');
+        if (!testimonialsContainer || !testimonialPrev || !testimonialNext || testimonialsContainer.children.length === 0) {
+            if (testimonialsContainer && testimonialsContainer.children.length <= 1) {
+                if(testimonialPrev) testimonialPrev.style.display = 'none';
+                if(testimonialNext) testimonialNext.style.display = 'none';
+            }
+            return;
+        }
+
+        if(testimonialPrev) testimonialPrev.style.display = 'flex';
+        if(testimonialNext) testimonialNext.style.display = 'flex';
+        
         let currentTestimonial = 0;
         const testimonialCount = testimonialsContainer.children.length;
+
         testimonialNext.addEventListener('click', () => {
             currentTestimonial = (currentTestimonial + 1) % testimonialCount;
             testimonialsContainer.style.transform = `translateX(-${currentTestimonial * 100}%)`;
@@ -408,8 +489,37 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
+    // NOUVELLE LOGIQUE POUR L'ACCORDÉON FAQ
+    function initializeFaqAccordion() {
+        const accordion = document.getElementById('faq-accordion');
+        if (!accordion) return;
+
+        const questions = accordion.querySelectorAll('.faq-question');
+
+        questions.forEach(question => {
+            question.addEventListener('click', () => {
+                const answer = question.nextElementSibling;
+
+                // Fermer les autres questions ouvertes (optionnel, pour un accordéon simple)
+                questions.forEach(q => {
+                    if (q !== question) {
+                        q.classList.remove('active');
+                        q.nextElementSibling.classList.remove('open');
+                    }
+                });
+
+                // Ouvrir/fermer la question cliquée
+                question.classList.toggle('active');
+                answer.classList.toggle('open');
+            });
+        });
+    }
+
+
     // --- DÉMARRAGE DE L'APPLICATION ---
     loadConfiguration();
     loadPressArticles();
     loadKnowledgeArticles();
+    loadTestimonials();
+    initializeFaqAccordion(); // On initialise la nouvelle fonctionnalité
 });

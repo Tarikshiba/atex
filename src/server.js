@@ -3,7 +3,6 @@ const express = require('express');
 const admin = require('firebase-admin');
 const cors = require('cors');
 const path = require('path');
-// MODIFICATION ICI : On importe "createClient" spécifiquement
 const { createClient } = require('@sanity/client');
 require('dotenv').config();
 
@@ -14,12 +13,11 @@ admin.initializeApp({
 });
 const db = admin.firestore();
 
-// --- NOUVELLE CONFIGURATION DE SANITY (pour le contenu) ---
-// MODIFICATION ICI : On utilise "createClient"
+// --- CONFIGURATION DE SANITY (pour le contenu) ---
 const client = createClient({
   projectId: process.env.SANITY_PROJECT_ID,
   dataset: 'production',
-  useCdn: true,
+  useCdn: true, 
   apiVersion: '2024-07-25',
 });
 
@@ -85,18 +83,9 @@ app.post('/api/initiate-transaction', async (req, res) => {
   }
 });
 
-// === ROUTES DE CONTENU MODIFIÉES POUR LIRE SANITY ===
-
+// Routes de contenu (lisent Sanity)
 app.get('/api/press-articles', async (req, res) => {
-  const query = `*[_type == "pressArticle"]{ 
-    title,
-    url,
-    excerpt,
-    "imageUrl": mainImage.asset->url,
-    category,
-    publishedDate,
-    readingTime
-  } | order(publishedDate desc)`;
+  const query = `*[_type == "pressArticle"]{ title, url, excerpt, "imageUrl": mainImage.asset->url, category, publishedDate, readingTime } | order(publishedDate desc)`;
   try {
     const articles = await client.fetch(query);
     res.status(200).json(articles);
@@ -107,18 +96,25 @@ app.get('/api/press-articles', async (req, res) => {
 });
 
 app.get('/api/knowledge-articles', async (req, res) => {
-  const query = `*[_type == "knowledgeArticle"]{
-    title,
-    iconClass,
-    content,
-    createdAt
-  } | order(createdAt desc)`;
+  const query = `*[_type == "knowledgeArticle"]{ title, iconClass, content, createdAt } | order(createdAt desc)`;
   try {
     const articles = await client.fetch(query);
     res.status(200).json(articles);
   } catch (error) {
     console.error("Erreur Sanity (knowledge-articles):", error);
     res.status(500).json({ message: "Erreur lors de la récupération des articles de savoir." });
+  }
+});
+
+// NOUVELLE ROUTE POUR LES AVIS
+app.get('/api/testimonials', async (req, res) => {
+  const query = `*[_type == "testimonial"]{ name, location, quote, "imageUrl": image.asset->url }`;
+  try {
+    const testimonials = await client.fetch(query);
+    res.status(200).json(testimonials);
+  } catch (error) {
+    console.error("Erreur Sanity (testimonials):", error);
+    res.status(500).json({ message: "Erreur lors de la récupération des témoignages." });
   }
 });
 
