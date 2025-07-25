@@ -3,20 +3,23 @@ const express = require('express');
 const admin = require('firebase-admin');
 const cors = require('cors');
 const path = require('path');
+const sanityClient = require('@sanity/client');
 require('dotenv').config();
 
-// ===================================================================
-// === CONFIGURATION DE FIREBASE (SÉCURISÉE POUR LA PRODUCTION) ===
-// ===================================================================
-const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-    : require(path.join(__dirname, '..', 'serviceAccountKey.json'));
-
+// --- CONFIGURATION DE FIREBASE (pour les transactions) ---
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 const db = admin.firestore();
-// ===================================================================
+
+// --- NOUVELLE CONFIGURATION DE SANITY (pour le contenu) ---
+const client = sanityClient({
+  projectId: process.env.SANITY_PROJECT_ID,
+  dataset: 'production',
+  useCdn: true, 
+  apiVersion: '2024-07-25',
+});
 
 // --- CONFIGURATION D'EXPRESS ---
 const app = express();
@@ -25,10 +28,11 @@ const PORT = process.env.PORT || 3000;
 // --- MIDDLEWARES ---
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public'));
 
 // --- ROUTES DE L'API ---
 
-// Route pour récupérer la configuration
+// Route pour la configuration (lit toujours Firestore)
 app.get('/api/config', async (req, res) => {
   try {
     const docRef = db.collection('configuration').doc('rates_and_fees');
@@ -43,7 +47,7 @@ app.get('/api/config', async (req, res) => {
   }
 });
 
-// Route pour initier une transaction
+// Route pour les transactions (écrit toujours dans Firestore)
 app.post('/api/initiate-transaction', async (req, res) => {
   try {
     const transactionData = req.body;
@@ -79,47 +83,48 @@ app.post('/api/initiate-transaction', async (req, res) => {
   }
 });
 
-// Routes pour le contenu dynamique (CMS)
+// === ROUTES DE CONTENU MODIFIÉES POUR LIRE SANITY ===
+
 app.get('/api/press-articles', async (req, res) => {
-    try {
-        const snapshot = await db.collection('press_articles').orderBy('publishedDate', 'desc').get();
-        if (snapshot.empty) {
-            return res.status(200).json([]);
-        }
-        const articles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        res.status(200).json(articles);
-    } catch (error) {
-        console.error("Erreur lors de la récupération des articles de presse:", error);
-        res.status(500).json({ message: "Erreur interne du serveur." });
-    }
+  const query = `*[_type == "pressArticle"]{ 
+    title,
+    url,
+    excerpt,
+    "imageUrl": mainImage.asset->url,
+    category,
+    publishedDate,
+    readingTime
+  } | order(publishedDate desc)`;
+  try {
+    const articles = await client.fetch(query);
+    res.status(200).json(articles);
+  } catch (error) {
+    console.error("Erreur Sanity (press-articles):", error);
+    res.status(500).json({ message: "Erreur lors de la récupération des articles de presse." });
+  }
 });
 
 app.get('/api/knowledge-articles', async (req, res) => {
-    try {
-        const snapshot = await db.collection('knowledge_articles').orderBy('createdAt', 'desc').get();
-        if (snapshot.empty) {
-            return res.status(200).json([]);
-        }
-        const articles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        res.status(200).json(articles);
-    } catch (error) {
-        console.error("Erreur lors de la récupération des articles de savoir:", error);
-        res.status(500).json({ message: "Erreur interne du serveur." });
-    }
+  const query = `*[_type == "knowledgeArticle"]{
+    title,
+    iconClass,
+    content,
+    createdAt
+  } | order(createdAt desc)`;
+  try {
+    const articles = await client.fetch(query);
+    res.status(200).json(articles);
+  } catch (error) {
+    console.error("Erreur Sanity (knowledge-articles):", error);
+    res.status(500).json({ message: "Erreur lors de la récupération des articles de savoir." });
+  }
 });
 
-
-// --- SERVICE DES FICHIERS FRONTEND (APRÈS LES ROUTES API) ---
-app.use(express.static(path.join(__dirname, '..', 'public')));
-
-// Route pour servir l'application principale (si l'URL est appelée directement)
+// --- GESTION DES ROUTES FRONTEND ET DÉMARRAGE ---
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-
-// --- DÉMARRAGE DU SERVEUR ---
 app.listen(PORT, () => {
   console.log(`Le serveur ATEX écoute sur le port ${PORT}`);
-  console.log(`Accédez à l'application sur http://localhost:${PORT}`);
 });

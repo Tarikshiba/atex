@@ -34,9 +34,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // =======================================================
-    // === NOUVELLES FONCTIONS POUR CHARGER LE CONTENU (CMS) ===
-    // =======================================================
     async function loadPressArticles() {
         try {
             const response = await fetch('/api/press-articles');
@@ -61,22 +58,19 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-
     // 2. Fonctions de calcul
     function calculateBuyAmount() {
         if (!state.config.rates) return;
         const amountFCFA = parseFloat(buyAmountInput.value) || 0;
         const crypto = cryptoSelectBuy.value;
         const finalCryptoAmount = (amountFCFA * (1 - state.config.feePercentage / 100)) * state.config.rates.buy[crypto];
-       let precision;
+        let precision;
         if (crypto === 'btc') {
             precision = 8;
-        } else if (crypto === 'eth' || crypto === 'bnb') { // Ajout de bnb avec 6 décimales
+        } else if (crypto === 'eth' || crypto === 'bnb') {
             precision = 6;
-        } else if (crypto === 'trx') { // Ajout de trx avec 4 décimales
-            precision = 4;
         } else {
-            precision = 4; // Par défaut pour USDT, LTC, XRP, etc.
+            precision = 4;
         }
         receiveAmountDisplay.textContent = `${finalCryptoAmount.toFixed(precision)} ${crypto.toUpperCase()}`;
         state.transaction.amountToSend = amountFCFA;
@@ -147,80 +141,85 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-
-    // =================================================
-    // === NOUVELLES FONCTIONS POUR AFFICHER LE CONTENU ===
-    // =================================================
+    // === FONCTIONS DE RENDU ADAPTÉES POUR SANITY ===
 
     function renderPressArticles(articles) {
-    const container = document.getElementById('press-articles-container');
-    if (!container) return;
-    if (articles.length === 0) {
-        container.innerHTML = '<p class="text-center text-warm-gray">Aucun article pour le moment.</p>';
-        return;
-    }
+        const container = document.getElementById('press-articles-container');
+        if (!container) return;
+        if (!articles || articles.length === 0) {
+            container.innerHTML = '<p class="text-center text-warm-gray">Aucun article pour le moment.</p>';
+            return;
+        }
 
-    // Fonction pour formater la date en toute sécurité
-    const formatDate = (dateObject) => {
-        if (dateObject && dateObject.seconds) {
-            return new Date(dateObject.seconds * 1000).toLocaleDateString('fr-FR', {
+        const formatDate = (dateString) => {
+            if (!dateString) return 'Date non disponible';
+            return new Date(dateString).toLocaleDateString('fr-FR', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric'
             });
-        }
-        return 'Date non disponible'; // Message par défaut si la date est invalide
-    };
+        };
 
-    const featuredArticle = articles[0];
-    const otherArticles = articles.slice(1);
+        const featuredArticle = articles[0];
+        const otherArticles = articles.slice(1);
 
-    let html = `
-        <a href="${featuredArticle.url}" target="_blank" class="featured-article block bg-white rounded-2xl overflow-hidden relative" style="background-image: url('${featuredArticle.imageUrl}'); background-size: cover; background-position: center;">
-            <div class="absolute inset-0 bg-gradient-to-t from-deep-night to-transparent opacity-80 z-10"></div>
-            <div class="absolute bottom-0 left-0 p-8 z-20">
-                <span class="bg-forest-green text-white text-sm font-medium px-3 py-1 rounded-full mb-3 inline-block">${featuredArticle.category}</span>
-                <h3 class="text-3xl font-bold text-white mb-4">${featuredArticle.title}</h3>
-                <div class="flex items-center text-sm text-white">
-                    <span>${formatDate(featuredArticle.publishedDate)}</span>
-                    <span class="mx-2">•</span>
-                    <span>${featuredArticle.readingTime} min de lecture</span>
-                </div>
-            </div>
-        </a>
-    `;
-
-    if (otherArticles.length > 0) {
-        html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">';
-        otherArticles.forEach(article => {
-            html += `
-                <a href="${article.url}" target="_blank" class="article-card block bg-white rounded-2xl overflow-hidden">
-                    <div class="h-48 bg-gray-300" style="background-image: url('${article.imageUrl}'); background-size: cover; background-position: center;"></div>
-                    <div class="p-6">
-                        <span class="text-sm font-semibold text-soft-gold mb-2 block">${article.category}</span>
-                        <h3 class="text-xl font-bold text-deep-night mb-3">${article.title}</h3>
-                        <p class="text-warm-gray mb-4 text-sm">${article.excerpt}</p>
-                        <div class="flex items-center text-xs text-warm-gray">
-                            <span>${formatDate(article.publishedDate)}</span>
-                            <span class="mx-2">•</span>
-                            <span>${article.readingTime} min de lecture</span>
-                        </div>
+        let html = `
+            <a href="${featuredArticle.url}" target="_blank" rel="noopener noreferrer" class="featured-article block bg-white rounded-2xl overflow-hidden relative" style="background-image: url('${featuredArticle.imageUrl || ''}'); background-size: cover; background-position: center;">
+                <div class="absolute inset-0 bg-gradient-to-t from-deep-night to-transparent opacity-80 z-10"></div>
+                <div class="absolute bottom-0 left-0 p-8 z-20">
+                    <span class="bg-forest-green text-white text-sm font-medium px-3 py-1 rounded-full mb-3 inline-block">${featuredArticle.category || ''}</span>
+                    <h3 class="text-3xl font-bold text-white mb-4">${featuredArticle.title}</h3>
+                    <div class="flex items-center text-sm text-white">
+                        <span>${formatDate(featuredArticle.publishedDate)}</span>
+                        <span class="mx-2">•</span>
+                        <span>${featuredArticle.readingTime || 'N/A'} min de lecture</span>
                     </div>
-                </a>
-            `;
-        });
-        html += '</div>';
+                </div>
+            </a>
+        `;
+
+        if (otherArticles.length > 0) {
+            html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">';
+            otherArticles.forEach(article => {
+                html += `
+                    <a href="${article.url}" target="_blank" rel="noopener noreferrer" class="article-card block bg-white rounded-2xl overflow-hidden">
+                        <div class="h-48 bg-gray-300" style="background-image: url('${article.imageUrl || ''}'); background-size: cover; background-position: center;"></div>
+                        <div class="p-6">
+                            <span class="text-sm font-semibold text-soft-gold mb-2 block">${article.category || ''}</span>
+                            <h3 class="text-xl font-bold text-deep-night mb-3">${article.title}</h3>
+                            <p class="text-warm-gray mb-4 text-sm">${article.excerpt || ''}</p>
+                            <div class="flex items-center text-xs text-warm-gray">
+                                <span>${formatDate(article.publishedDate)}</span>
+                                <span class="mx-2">•</span>
+                                <span>${article.readingTime || 'N/A'} min de lecture</span>
+                            </div>
+                        </div>
+                    </a>
+                `;
+            });
+            html += '</div>';
+        }
+        container.innerHTML = html;
     }
-    container.innerHTML = html;
-}
 
     function renderKnowledgeArticles(articles) {
         const container = document.getElementById('knowledge-articles-container');
         if (!container) return;
-        if (articles.length === 0) {
+        if (!articles || articles.length === 0) {
             container.innerHTML = '<p class="text-center text-warm-gray md:col-span-2">Aucun article pour le moment.</p>';
             return;
         }
+
+        const blocksToHtml = (blocks) => {
+            if (!blocks) return '';
+            return blocks
+                .filter(block => block._type === 'block' && block.children)
+                .map(block => {
+                    const childrenText = block.children.map(child => child.text).join('');
+                    return `<p>${childrenText}</p>`;
+                })
+                .join('');
+        };
 
         let html = '';
         articles.forEach(article => {
@@ -233,14 +232,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                         <h3 class="text-2xl font-bold text-deep-night">${article.title}</h3>
                     </div>
                     <div class="text-warm-gray space-y-4">
-                        ${article.content.map(paragraph => `<p>${paragraph}</p>`).join('')}
+                        ${blocksToHtml(article.content)}
                     </div>
                 </div>
             `;
         });
         container.innerHTML = html;
     }
-
 
     // --- INITIALISATION & GESTION DE L'UI ---
 
@@ -264,21 +262,16 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.querySelectorAll('.nav-link, #mobile-menu a').forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
-            // Hide all sections
             document.querySelectorAll('main > section').forEach(section => {
                 if (!section.classList.contains('hidden')) {
                     section.classList.add('hidden');
                 }
             });
-            
-            // Show the target section
-            const sectionId = this.getAttribute('data-section');
+            const sectionId = this.dataset.section;
             const targetSection = document.getElementById(sectionId);
             if (targetSection) {
                 targetSection.classList.remove('hidden');
             }
-
-            // Close mobile menu if open
             const mobileMenu = document.getElementById('mobile-menu');
             if (mobileMenu.classList.contains('open')) {
                 mobileMenu.classList.remove('open');
