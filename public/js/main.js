@@ -58,9 +58,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (errorElement) errorElement.textContent = '';
     }
 
-    function validateAmount(inputElement, errorElementId) {
+    function validateAmount(inputElement, errorElementId, minAmount = 1) {
         const value = parseFloat(inputElement.value);
-        if (inputElement.value.trim() === '' || isNaN(value) || value <= 0) {
+        if (inputElement.value.trim() === '' || isNaN(value) || value < minAmount) {
             showError(errorElementId, errorMessages.amount);
             return false;
         }
@@ -94,6 +94,16 @@ document.addEventListener('DOMContentLoaded', async function() {
             const response = await fetch('/api/config');
             if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
             state.config = await response.json();
+
+            // Mettre à jour l'affichage des frais
+            const feeDisplays = document.querySelectorAll('#fee-display');
+            if (state.config.fees) {
+                const feeText = `(Frais: ${state.config.fees.feePercentage}% + ${state.config.fees.fixedFeeFCFA} FCFA)`;
+                feeDisplays.forEach(el => el.textContent = feeText);
+            } else {
+                 feeDisplays.forEach(el => el.textContent = `(Frais non disponibles)`);
+            }
+
             initializeCalculators();
         } catch (error) {
             console.error("Impossible de charger la configuration:", error);
@@ -174,14 +184,25 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     
     function calculateBuyAmount() {
-        if (!state.config.rates) return;
+        if (!state.config.marketRates || !state.config.fees) return;
+
         const amountFCFA = parseFloat(buyAmountInput.value) || 0;
         const crypto = cryptoSelectBuy.value;
-        const finalCryptoAmount = (amountFCFA * (1 - state.config.feePercentage / 100)) * state.config.rates.buy[crypto];
-        let precision;
-        if (crypto === 'btc') precision = 8;
-        else if (crypto === 'eth' || crypto === 'bnb') precision = 6;
-        else precision = 4;
+        const marketPrice = state.config.marketRates[crypto];
+        const { feePercentage, fixedFeeFCFA } = state.config.fees;
+
+        if (!marketPrice || amountFCFA <= fixedFeeFCFA) {
+            receiveAmountDisplay.textContent = `0.00 ${crypto.toUpperCase()}`;
+            return;
+        }
+
+        const amountAfterFixedFee = amountFCFA - fixedFeeFCFA;
+        const percentageFeeAmount = amountAfterFixedFee * (feePercentage / 100);
+        const amountToConvertToCrypto = amountAfterFixedFee - percentageFeeAmount;
+        const finalCryptoAmount = amountToConvertToCrypto / marketPrice;
+
+        let precision = (crypto === 'btc') ? 8 : (['eth', 'bnb'].includes(crypto) ? 6 : 4);
+        
         receiveAmountDisplay.textContent = `${finalCryptoAmount.toFixed(precision)} ${crypto.toUpperCase()}`;
         state.transaction.amountToSend = amountFCFA;
         state.transaction.amountToReceive = finalCryptoAmount;
@@ -190,14 +211,28 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     
     function calculateSellAmount() {
-        if (!state.config.rates) return;
+        if (!state.config.marketRates || !state.config.fees) return;
+
         const amountCrypto = parseFloat(sellAmountInput.value) || 0;
         const crypto = cryptoSelectSell.value;
-        const calculatedAmount = (amountCrypto * (1 - state.config.feePercentage / 100)) * state.config.rates.sell[crypto];
+        const marketPrice = state.config.marketRates[crypto];
+        const { feePercentage, fixedFeeFCFA } = state.config.fees;
+
+        if (!marketPrice) {
+            receiveAmountSellDisplay.textContent = `0.00 FCFA`;
+            return;
+        }
+
+        const valueInFCFA = amountCrypto * marketPrice;
+        const percentageFeeAmount = valueInFCFA * (feePercentage / 100);
+        let finalFCFAAmount = valueInFCFA - percentageFeeAmount - fixedFeeFCFA;
+
+        if (finalFCFAAmount < 0) finalFCFAAmount = 0;
+
         sellCurrencySymbol.textContent = crypto.toUpperCase();
-        receiveAmountSellDisplay.textContent = `${new Intl.NumberFormat('fr-FR').format(calculatedAmount.toFixed(0))} FCFA`;
+        receiveAmountSellDisplay.textContent = `${new Intl.NumberFormat('fr-FR').format(finalFCFAAmount.toFixed(0))} FCFA`;
         state.transaction.amountToSend = amountCrypto;
-        state.transaction.amountToReceive = calculatedAmount;
+        state.transaction.amountToReceive = finalFCFAAmount;
         state.transaction.currencyFrom = crypto.toUpperCase();
         state.transaction.currencyTo = 'FCFA';
     }
@@ -210,7 +245,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         let errorMessage = '';
 
         if (currentType === 'buy') {
-            const isAmountValid = validateAmount(buyAmountInput, 'buy-amount-error');
+            const minAmount = state.config.fees ? state.config.fees.fixedFeeFCFA + 1 : 1;
+            const isAmountValid = validateAmount(buyAmountInput, 'buy-amount-error', minAmount);
             const isWalletValid = validateWalletAddress(buyWalletAddressInput, 'buy-wallet-error');
             if (!isAmountValid || !isWalletValid) {
                 isFormValid = false;
@@ -219,7 +255,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 isFormValid = false;
                 errorMessage = 'Veuillez choisir un moyen de paiement.';
             }
-        } else {
+        } else { // type === 'sell'
             const isAmountValid = validateAmount(sellAmountInput, 'sell-amount-error');
             const isPhoneValid = validatePhoneNumber(sellPhoneNumberInput, 'sell-phone-error');
             if (!isAmountValid || !isPhoneValid) {
@@ -251,10 +287,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             });
 
             const result = await response.json();
+
             if (!response.ok) {
                 throw new Error(result.message || 'La réponse du serveur n\'est pas OK');
             }
+            
             window.location.href = result.whatsappUrl;
+
         } catch (error) {
             console.error('Erreur lors de l\'initiation de la transaction:', error);
             showNotification(`Une erreur est survenue : ${error.message}`);
@@ -275,7 +314,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         const formatDate = (dateString) => {
             if (!dateString) return 'Date non disponible';
             return new Date(dateString).toLocaleDateString('fr-FR', {
-                year: 'numeric', month: 'long', day: 'numeric'
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
             });
         };
 
@@ -358,7 +399,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // --- INITIALISATION & GESTION DE L'UI ---
     function initializeCalculators() {
-        buyAmountInput.addEventListener('input', () => validateAmount(buyAmountInput, 'buy-amount-error'));
+        const minBuyAmount = state.config.fees ? state.config.fees.fixedFeeFCFA + 1 : 201;
+        buyAmountInput.addEventListener('input', () => validateAmount(buyAmountInput, 'buy-amount-error', minBuyAmount));
         buyWalletAddressInput.addEventListener('input', () => validateWalletAddress(buyWalletAddressInput, 'buy-wallet-error'));
         sellAmountInput.addEventListener('input', () => validateAmount(sellAmountInput, 'sell-amount-error'));
         sellPhoneNumberInput.addEventListener('input', () => validatePhoneNumber(sellPhoneNumberInput, 'sell-phone-error'));
@@ -372,21 +414,30 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     window.addEventListener('scroll', function() {
-        if (window.scrollY > 50) header.classList.add('header-blur', 'bg-white', 'bg-opacity-80', 'shadow-sm');
-        else header.classList.remove('header-blur', 'bg-white', 'bg-opacity-80', 'shadow-sm');
+        if (window.scrollY > 50) {
+            header.classList.add('header-blur', 'bg-white', 'bg-opacity-80', 'shadow-sm');
+        } else {
+            header.classList.remove('header-blur', 'bg-white', 'bg-opacity-80', 'shadow-sm');
+        }
     });
 
     document.querySelectorAll('.nav-link, #mobile-menu a').forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             document.querySelectorAll('main > section').forEach(section => {
-                if (!section.classList.contains('hidden')) section.classList.add('hidden');
+                if (!section.classList.contains('hidden')) {
+                    section.classList.add('hidden');
+                }
             });
             const sectionId = this.dataset.section;
             const targetSection = document.getElementById(sectionId);
-            if (targetSection) targetSection.classList.remove('hidden');
+            if (targetSection) {
+                targetSection.classList.remove('hidden');
+            }
             const mobileMenu = document.getElementById('mobile-menu');
-            if (mobileMenu.classList.contains('open')) mobileMenu.classList.remove('open');
+            if (mobileMenu.classList.contains('open')) {
+                mobileMenu.classList.remove('open');
+            }
         });
     });
 
@@ -444,6 +495,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         const testimonialsContainer = document.getElementById('testimonials-container');
         const testimonialPrev = document.getElementById('testimonial-prev');
         const testimonialNext = document.getElementById('testimonial-next');
+        
         if (!testimonialsContainer || !testimonialPrev || !testimonialNext || testimonialsContainer.children.length === 0) {
             if (testimonialsContainer && testimonialsContainer.children.length <= 1) {
                 if(testimonialPrev) testimonialPrev.style.display = 'none';
@@ -489,7 +541,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
-    // NOUVELLE LOGIQUE POUR L'ACCORDÉON FAQ
     function initializeFaqAccordion() {
         const accordion = document.getElementById('faq-accordion');
         if (!accordion) return;
@@ -499,18 +550,17 @@ document.addEventListener('DOMContentLoaded', async function() {
         questions.forEach(question => {
             question.addEventListener('click', () => {
                 const answer = question.nextElementSibling;
+                const wasActive = question.classList.contains('active');
 
-                // Fermer les autres questions ouvertes (optionnel, pour un accordéon simple)
                 questions.forEach(q => {
-                    if (q !== question) {
-                        q.classList.remove('active');
-                        q.nextElementSibling.classList.remove('open');
-                    }
+                    q.classList.remove('active');
+                    q.nextElementSibling.classList.remove('open');
                 });
 
-                // Ouvrir/fermer la question cliquée
-                question.classList.toggle('active');
-                answer.classList.toggle('open');
+                if (!wasActive) {
+                    question.classList.add('active');
+                    answer.classList.add('open');
+                }
             });
         });
     }
@@ -521,5 +571,5 @@ document.addEventListener('DOMContentLoaded', async function() {
     loadPressArticles();
     loadKnowledgeArticles();
     loadTestimonials();
-    initializeFaqAccordion(); // On initialise la nouvelle fonctionnalité
+    initializeFaqAccordion();
 });

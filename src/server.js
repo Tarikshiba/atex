@@ -4,9 +4,10 @@ const admin = require('firebase-admin');
 const cors = require('cors');
 const path = require('path');
 const { createClient } = require('@sanity/client');
+const axios = require('axios'); // <- On importe axios
 require('dotenv').config();
 
-// --- CONFIGURATION DE FIREBASE (pour les transactions) ---
+// --- CONFIGURATION DE FIREBASE (pour les transactions et la config des frais) ---
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -30,53 +31,112 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// --- ROUTES DE L'API ---
 
-// Route pour la configuration (lit toujours Firestore)
+// ================= NOUVELLE LOGIQUE DE PRIX DYNAMIQUES =================
+
+// Notre cache en mémoire pour stocker les prix temporairement
+const cache = {
+  prices: null,
+  lastFetch: 0
+};
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes en millisecondes
+
+// Mapping de nos symboles internes vers les IDs de CoinGecko
+const coinGeckoMapping = {
+  usdt: 'tether',
+  btc: 'bitcoin',
+  eth: 'ethereum',
+  ltc: 'litecoin',
+  xrp: 'ripple',
+  trx: 'tron',
+  bnb: 'binance-coin'
+};
+
+// Route pour la configuration (maintenant dynamique)
 app.get('/api/config', async (req, res) => {
   try {
+    const now = Date.now();
+    let pricesFromApi;
+
+    // 1. Vérifier le cache
+    if (cache.prices && (now - cache.lastFetch < CACHE_DURATION)) {
+      pricesFromApi = cache.prices;
+    } else {
+      // 2. Si le cache est vide ou expiré, appeler l'API CoinGecko
+      const ids = Object.values(coinGeckoMapping).join(',');
+      const apiUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=xof`;
+      
+      const response = await axios.get(apiUrl);
+      const rawPrices = response.data;
+
+      // 3. Formater les prix pour notre application
+      pricesFromApi = {};
+      for (const symbol in coinGeckoMapping) {
+        const coingeckoId = coinGeckoMapping[symbol];
+        if (rawPrices[coingeckoId]) {
+          pricesFromApi[symbol] = rawPrices[coingeckoId].xof;
+        }
+      }
+      
+      // 4. Mettre à jour notre cache
+      cache.prices = pricesFromApi;
+      cache.lastFetch = now;
+    }
+
+    // 5. Récupérer la configuration des frais depuis Firestore
     const docRef = db.collection('configuration').doc('rates_and_fees');
     const doc = await docRef.get();
     if (!doc.exists) {
-      return res.status(404).json({ message: "Le document de configuration est introuvable." });
+      return res.status(404).json({ message: "Le document de configuration des frais est introuvable." });
     }
-    res.status(200).json(doc.data());
+    const feeConfig = doc.data();
+
+    // 6. Envoyer la configuration complète au frontend
+    res.status(200).json({ 
+      marketRates: pricesFromApi,
+      fees: feeConfig
+    });
+
   } catch (error) {
-    console.error("Erreur lors de la récupération de la configuration:", error);
-    res.status(500).json({ message: "Erreur interne du serveur." });
+    console.error("Erreur lors de la récupération de la configuration dynamique:", error);
+    // En cas d'erreur de l'API externe, on peut utiliser le cache si disponible
+    if (cache.prices) {
+        const docRef = db.collection('configuration').doc('rates_and_fees');
+        const doc = await docRef.get();
+        const feeConfig = doc.data();
+        res.status(200).json({ marketRates: cache.prices, fees: feeConfig });
+        return;
+    }
+    res.status(500).json({ message: "Erreur interne du serveur lors de la récupération des prix." });
   }
 });
+
+// ================= FIN DE LA NOUVELLE LOGIQUE =================
+
 
 // Route pour les transactions (écrit toujours dans Firestore)
 app.post('/api/initiate-transaction', async (req, res) => {
   try {
     const transactionData = req.body;
-
     if (!transactionData.type || !transactionData.amountToSend || !transactionData.paymentMethod) {
       return res.status(400).json({ message: "Données de transaction manquantes ou invalides." });
     }
-
     const transactionToSave = {
       ...transactionData,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       status: 'pending'
     };
-
     await db.collection('transactions').add(transactionToSave);
-
     let message = '';
     if (transactionData.type === 'buy') {
-      message = `Bonjour ATEX, je souhaite initier un NOUVEL ACHAT :\n- Montant à payer : ${transactionData.amountToSend} FCFA\n- Crypto à recevoir : ${transactionData.amountToReceive.toFixed(4)} ${transactionData.currencyTo}\n- Mon adresse Wallet : ${transactionData.walletAddress}\n- Moyen de paiement : ${transactionData.paymentMethod}`;
+      message = `Bonjour ATEX, je souhaite initier un NOUVEL ACHAT :\n- Montant à payer : ${transactionData.amountToSend} FCFA\n- Crypto à recevoir : ${Number(transactionData.amountToReceive).toFixed(6)} ${transactionData.currencyTo}\n- Mon adresse Wallet : ${transactionData.walletAddress}\n- Moyen de paiement : ${transactionData.paymentMethod}`;
     } else {
       message = `Bonjour ATEX, je souhaite initier une NOUVELLE VENTE :\n- Montant à envoyer : ${transactionData.amountToSend} ${transactionData.currencyFrom}\n- Montant à recevoir : ${Math.round(transactionData.amountToReceive)} FCFA\n- Mon numéro pour le dépôt : ${transactionData.phoneNumber}\n- Moyen de réception : ${transactionData.paymentMethod}`;
     }
-
     const whatsappNumber = process.env.WHATSAPP_NUMBER;
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodedMessage}`;
-
     res.status(200).json({ whatsappUrl });
-
   } catch (error) {
     console.error("Erreur lors de l'initialisation de la transaction:", error);
     res.status(500).json({ message: "Erreur interne du serveur." });
@@ -106,7 +166,6 @@ app.get('/api/knowledge-articles', async (req, res) => {
   }
 });
 
-// NOUVELLE ROUTE POUR LES AVIS
 app.get('/api/testimonials', async (req, res) => {
   const query = `*[_type == "testimonial"]{ name, location, quote, "imageUrl": image.asset->url }`;
   try {
