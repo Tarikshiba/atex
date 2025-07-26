@@ -39,7 +39,7 @@ const cache = {
   prices: null,
   lastFetch: 0
 };
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes en millisecondes
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes en millisecondes
 
 // Mapping de nos symboles internes vers les IDs de CoinGecko
 const coinGeckoMapping = {
