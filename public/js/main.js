@@ -23,18 +23,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     function showNotification(message, type = 'error') {
         const container = document.getElementById('notification-container');
         if (!container) return;
-
         const notif = document.createElement('div');
         const bgColor = type === 'error' ? 'bg-red-500' : 'bg-green-500';
         notif.className = `toast text-white py-2 px-4 rounded-lg shadow-lg ${bgColor}`;
         notif.textContent = message;
-        
         container.appendChild(notif);
-
-        setTimeout(() => {
-            notif.classList.add('show');
-        }, 10);
-
+        setTimeout(() => { notif.classList.add('show'); }, 10);
         setTimeout(() => {
             notif.classList.remove('show');
             notif.addEventListener('transitionend', () => notif.remove());
@@ -88,7 +82,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     
     // --- LOGIQUE DE CHARGEMENT DES DONNÉES ---
-
     async function loadConfiguration() {
         try {
             const response = await fetch('/api/config');
@@ -138,16 +131,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // --- LOGIQUE DE RENDU (RENDER) ---
-
     function renderTestimonials(testimonials) {
         const container = document.getElementById('testimonials-container');
         if (!container) return;
-        
         if (!testimonials || testimonials.length === 0) {
             container.innerHTML = '<p class="w-full text-center text-warm-gray">Aucun témoignage pour le moment.</p>';
             return;
         }
-
         let html = '';
         testimonials.forEach(testimonial => {
             const imageUrl = testimonial.imageUrl || 'images/default-avatar.png';
@@ -179,20 +169,15 @@ document.addEventListener('DOMContentLoaded', async function() {
             receiveAmountDisplay.textContent = `0.00 ${cryptoSelectBuy.value.toUpperCase()}`;
             return;
         }
-
         const amountFCFA = parseFloat(buyAmountInput.value) || 0;
         const crypto = cryptoSelectBuy.value;
         const atexBuyPrice = state.config.atexPrices[crypto]?.buy;
-
         if (!atexBuyPrice || amountFCFA <= 0) {
             receiveAmountDisplay.textContent = `0.00 ${crypto.toUpperCase()}`;
             return;
         }
-
         const finalCryptoAmount = amountFCFA / atexBuyPrice;
-
         let precision = (crypto === 'btc') ? 8 : 4;
-        
         receiveAmountDisplay.textContent = `${finalCryptoAmount.toFixed(precision)} ${crypto.toUpperCase()}`;
         state.transaction.amountToSend = amountFCFA;
         state.transaction.amountToReceive = finalCryptoAmount;
@@ -205,18 +190,14 @@ document.addEventListener('DOMContentLoaded', async function() {
             receiveAmountSellDisplay.textContent = `0.00 FCFA`;
             return;
         }
-
         const amountCrypto = parseFloat(sellAmountInput.value) || 0;
         const crypto = cryptoSelectSell.value;
         const atexSellPrice = state.config.atexPrices[crypto]?.sell;
-
         if (!atexSellPrice || amountCrypto <= 0) {
             receiveAmountSellDisplay.textContent = `0.00 FCFA`;
             return;
         }
-
         const finalFCFAAmount = amountCrypto * atexSellPrice;
-
         sellCurrencySymbol.textContent = crypto.toUpperCase();
         receiveAmountSellDisplay.textContent = `${new Intl.NumberFormat('fr-FR').format(finalFCFAAmount.toFixed(0))} FCFA`;
         state.transaction.amountToSend = amountCrypto;
@@ -228,10 +209,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     async function handleInitiateTransaction() {
         const currentType = state.transaction.type;
         const button = currentType === 'buy' ? initiateBuyBtn : initiateSellBtn;
-        
         let isFormValid = true;
         let errorMessage = '';
-
         if (currentType === 'buy') {
             const isAmountValid = validateAmount(buyAmountInput, 'buy-amount-error');
             const isWalletValid = validateWalletAddress(buyWalletAddressInput, 'buy-wallet-error');
@@ -242,7 +221,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 isFormValid = false;
                 errorMessage = 'Veuillez choisir un moyen de paiement.';
             }
-        } else { // type === 'sell'
+        } else {
             const isAmountValid = validateAmount(sellAmountInput, 'sell-amount-error');
             const isPhoneValid = validatePhoneNumber(sellPhoneNumberInput, 'sell-phone-error');
             if (!isAmountValid || !isPhoneValid) {
@@ -253,34 +232,26 @@ document.addEventListener('DOMContentLoaded', async function() {
                 errorMessage = 'Veuillez choisir un moyen de réception.';
             }
         }
-
         if (!isFormValid) {
             showNotification(errorMessage);
             return;
         }
-
         const originalButtonText = button.innerHTML;
         button.disabled = true;
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Initialisation...';
-        
         try {
             state.transaction.walletAddress = buyWalletAddressInput.value;
             state.transaction.phoneNumber = sellPhoneNumberInput.value;
-            
             const response = await fetch('/api/initiate-transaction', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(state.transaction)
             });
-
             const result = await response.json();
-
             if (!response.ok) {
                 throw new Error(result.message || 'La réponse du serveur n\'est pas OK');
             }
-            
             window.location.href = result.whatsappUrl;
-
         } catch (error) {
             console.error('Erreur lors de l\'initiation de la transaction:', error);
             showNotification(`Une erreur est survenue : ${error.message}`);
@@ -290,6 +261,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
+    // ====================== FONCTION CORRIGÉE ======================
     function renderPressArticles(articles) {
         const container = document.getElementById('press-articles-container');
         if (!container) return;
@@ -334,7 +306,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                             <h3 class="text-xl font-bold text-deep-night mb-3">${article.title}</h3>
                             <p class="text-warm-gray mb-4 text-sm">${article.excerpt || ''}</p>
                             <div class="flex items-center text-xs text-warm-gray">
-                                <span>${formatDate(publishedDate)}</span>
+                                <span>${formatDate(article.publishedDate)}</span>
                                 <span class="mx-2">•</span>
                                 <span>${article.readingTime || 'N/A'} min de lecture</span>
                             </div>
@@ -354,7 +326,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             container.innerHTML = '<p class="text-center text-warm-gray md:col-span-2">Aucun article pour le moment.</p>';
             return;
         }
-
         const blocksToHtml = (blocks) => {
             if (!blocks) return '';
             return blocks
@@ -481,7 +452,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         const testimonialsContainer = document.getElementById('testimonials-container');
         const testimonialPrev = document.getElementById('testimonial-prev');
         const testimonialNext = document.getElementById('testimonial-next');
-        
         if (!testimonialsContainer || !testimonialPrev || !testimonialNext || testimonialsContainer.children.length === 0) {
             if (testimonialsContainer && testimonialsContainer.children.length <= 1) {
                 if(testimonialPrev) testimonialPrev.style.display = 'none';
@@ -489,13 +459,10 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
             return;
         }
-
         if(testimonialPrev) testimonialPrev.style.display = 'flex';
         if(testimonialNext) testimonialNext.style.display = 'flex';
-        
         let currentTestimonial = 0;
         const testimonialCount = testimonialsContainer.children.length;
-
         testimonialNext.addEventListener('click', () => {
             currentTestimonial = (currentTestimonial + 1) % testimonialCount;
             testimonialsContainer.style.transform = `translateX(-${currentTestimonial * 100}%)`;
@@ -530,19 +497,15 @@ document.addEventListener('DOMContentLoaded', async function() {
     function initializeFaqAccordion() {
         const accordion = document.getElementById('faq-accordion');
         if (!accordion) return;
-
         const questions = accordion.querySelectorAll('.faq-question');
-
         questions.forEach(question => {
             question.addEventListener('click', () => {
                 const answer = question.nextElementSibling;
                 const wasActive = question.classList.contains('active');
-
                 questions.forEach(q => {
                     q.classList.remove('active');
                     q.nextElementSibling.classList.remove('open');
                 });
-
                 if (!wasActive) {
                     question.classList.add('active');
                     answer.classList.add('open');
@@ -550,7 +513,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             });
         });
     }
-
 
     // --- DÉMARRAGE DE L'APPLICATION ---
     loadConfiguration();
