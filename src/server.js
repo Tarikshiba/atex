@@ -52,7 +52,6 @@ async function updateMarketPrices() {
     
     const ids = Object.values(coinGeckoMapping).join(',');
     
-    // NOUVELLE URL AVEC LA CLÉ D'API
     const apiKey = process.env.COINGECKO_API_KEY;
     if (!apiKey) {
         throw new Error("La clé d'API CoinGecko n'est pas définie dans les variables d'environnement.");
@@ -61,6 +60,9 @@ async function updateMarketPrices() {
     
     const response = await axios.get(apiUrl);
     const marketPrices = response.data;
+
+    // LIGNE DE DÉBUG AJOUTÉE
+    console.log("Réponse BRUTE de CoinGecko:", JSON.stringify(marketPrices, null, 2));
 
     const atexPrices = {};
     const margin = marginPercentage / 100;
@@ -108,7 +110,7 @@ app.post('/api/cron/update-prices', async (req, res) => {
     }
 });
 
-// Route pour la configuration (ne change pas)
+// Route pour la configuration
 app.get('/api/config', async (req, res) => {
   try {
     const feesDocRef = db.collection('configuration').doc('rates_and_fees');
@@ -118,7 +120,6 @@ app.get('/api/config', async (req, res) => {
     const pricesDocRef = db.collection('market_data').doc('live_prices');
     const pricesDoc = await pricesDocRef.get();
     if (!pricesDoc.exists) {
-      // On tente de lancer le worker manuellement une fois au cas où
       console.log("Les prix n'existent pas, tentative de lancement manuel du worker...");
       await updateMarketPrices();
       const newPricesDoc = await pricesDocRef.get();
