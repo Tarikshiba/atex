@@ -94,16 +94,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             const response = await fetch('/api/config');
             if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
             state.config = await response.json();
-
-            // Mettre à jour l'affichage des frais
-            const feeDisplays = document.querySelectorAll('#fee-display');
-            if (state.config.fees) {
-                const feeText = `(Frais: ${state.config.fees.feePercentage}% + ${state.config.fees.fixedFeeFCFA} FCFA)`;
-                feeDisplays.forEach(el => el.textContent = feeText);
-            } else {
-                 feeDisplays.forEach(el => el.textContent = `(Frais non disponibles)`);
-            }
-
             initializeCalculators();
         } catch (error) {
             console.error("Impossible de charger la configuration:", error);
@@ -183,25 +173,25 @@ document.addEventListener('DOMContentLoaded', async function() {
         initializeTestimonialCarousel();
     }
     
+    // --- LOGIQUE DE CALCUL (SIMPLIFIÉE) ---
     function calculateBuyAmount() {
-        if (!state.config.marketRates || !state.config.fees) return;
+        if (!state.config.atexPrices) {
+            receiveAmountDisplay.textContent = `0.00 ${cryptoSelectBuy.value.toUpperCase()}`;
+            return;
+        }
 
         const amountFCFA = parseFloat(buyAmountInput.value) || 0;
         const crypto = cryptoSelectBuy.value;
-        const marketPrice = state.config.marketRates[crypto];
-        const { feePercentage, fixedFeeFCFA } = state.config.fees;
+        const atexBuyPrice = state.config.atexPrices[crypto]?.buy;
 
-        if (!marketPrice || amountFCFA <= fixedFeeFCFA) {
+        if (!atexBuyPrice || amountFCFA <= 0) {
             receiveAmountDisplay.textContent = `0.00 ${crypto.toUpperCase()}`;
             return;
         }
 
-        const amountAfterFixedFee = amountFCFA - fixedFeeFCFA;
-        const percentageFeeAmount = amountAfterFixedFee * (feePercentage / 100);
-        const amountToConvertToCrypto = amountAfterFixedFee - percentageFeeAmount;
-        const finalCryptoAmount = amountToConvertToCrypto / marketPrice;
+        const finalCryptoAmount = amountFCFA / atexBuyPrice;
 
-        let precision = (crypto === 'btc') ? 8 : (['eth', 'bnb'].includes(crypto) ? 6 : 4);
+        let precision = (crypto === 'btc') ? 8 : 4;
         
         receiveAmountDisplay.textContent = `${finalCryptoAmount.toFixed(precision)} ${crypto.toUpperCase()}`;
         state.transaction.amountToSend = amountFCFA;
@@ -211,23 +201,21 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     
     function calculateSellAmount() {
-        if (!state.config.marketRates || !state.config.fees) return;
-
-        const amountCrypto = parseFloat(sellAmountInput.value) || 0;
-        const crypto = cryptoSelectSell.value;
-        const marketPrice = state.config.marketRates[crypto];
-        const { feePercentage, fixedFeeFCFA } = state.config.fees;
-
-        if (!marketPrice) {
+        if (!state.config.atexPrices) {
             receiveAmountSellDisplay.textContent = `0.00 FCFA`;
             return;
         }
 
-        const valueInFCFA = amountCrypto * marketPrice;
-        const percentageFeeAmount = valueInFCFA * (feePercentage / 100);
-        let finalFCFAAmount = valueInFCFA - percentageFeeAmount - fixedFeeFCFA;
+        const amountCrypto = parseFloat(sellAmountInput.value) || 0;
+        const crypto = cryptoSelectSell.value;
+        const atexSellPrice = state.config.atexPrices[crypto]?.sell;
 
-        if (finalFCFAAmount < 0) finalFCFAAmount = 0;
+        if (!atexSellPrice || amountCrypto <= 0) {
+            receiveAmountSellDisplay.textContent = `0.00 FCFA`;
+            return;
+        }
+
+        const finalFCFAAmount = amountCrypto * atexSellPrice;
 
         sellCurrencySymbol.textContent = crypto.toUpperCase();
         receiveAmountSellDisplay.textContent = `${new Intl.NumberFormat('fr-FR').format(finalFCFAAmount.toFixed(0))} FCFA`;
@@ -245,8 +233,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         let errorMessage = '';
 
         if (currentType === 'buy') {
-            const minAmount = state.config.fees ? state.config.fees.fixedFeeFCFA + 1 : 1;
-            const isAmountValid = validateAmount(buyAmountInput, 'buy-amount-error', minAmount);
+            const isAmountValid = validateAmount(buyAmountInput, 'buy-amount-error');
             const isWalletValid = validateWalletAddress(buyWalletAddressInput, 'buy-wallet-error');
             if (!isAmountValid || !isWalletValid) {
                 isFormValid = false;
@@ -347,7 +334,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                             <h3 class="text-xl font-bold text-deep-night mb-3">${article.title}</h3>
                             <p class="text-warm-gray mb-4 text-sm">${article.excerpt || ''}</p>
                             <div class="flex items-center text-xs text-warm-gray">
-                                <span>${formatDate(article.publishedDate)}</span>
+                                <span>${formatDate(publishedDate)}</span>
                                 <span class="mx-2">•</span>
                                 <span>${article.readingTime || 'N/A'} min de lecture</span>
                             </div>
@@ -399,8 +386,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // --- INITIALISATION & GESTION DE L'UI ---
     function initializeCalculators() {
-        const minBuyAmount = state.config.fees ? state.config.fees.fixedFeeFCFA + 1 : 201;
-        buyAmountInput.addEventListener('input', () => validateAmount(buyAmountInput, 'buy-amount-error', minBuyAmount));
+        buyAmountInput.addEventListener('input', () => validateAmount(buyAmountInput, 'buy-amount-error'));
         buyWalletAddressInput.addEventListener('input', () => validateWalletAddress(buyWalletAddressInput, 'buy-wallet-error'));
         sellAmountInput.addEventListener('input', () => validateAmount(sellAmountInput, 'sell-amount-error'));
         sellPhoneNumberInput.addEventListener('input', () => validatePhoneNumber(sellPhoneNumberInput, 'sell-phone-error'));

@@ -4,17 +4,17 @@ const admin = require('firebase-admin');
 const cors = require('cors');
 const path = require('path');
 const { createClient } = require('@sanity/client');
-const axios = require('axios'); // <- On importe axios
+const axios = require('axios');
 require('dotenv').config();
 
-// --- CONFIGURATION DE FIREBASE (pour les transactions et la config des frais) ---
+// --- CONFIGURATION DE FIREBASE ---
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 const db = admin.firestore();
 
-// --- CONFIGURATION DE SANITY (pour le contenu) ---
+// --- CONFIGURATION DE SANITY ---
 const client = createClient({
   projectId: process.env.SANITY_PROJECT_ID,
   dataset: 'production',
@@ -31,90 +31,104 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// ================= LOGIQUE DU WORKER INTÉGRÉE =================
 
-// ================= NOUVELLE LOGIQUE DE PRIX DYNAMIQUES =================
-
-// Notre cache en mémoire pour stocker les prix temporairement
-const cache = {
-  prices: null,
-  lastFetch: 0
-};
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes en millisecondes
-
-// Mapping de nos symboles internes vers les IDs de CoinGecko
 const coinGeckoMapping = {
   usdt: 'tether',
   btc: 'bitcoin',
-  eth: 'ethereum',
-  ltc: 'litecoin',
-  xrp: 'ripple',
+  bnb: 'binancecoin',
   trx: 'tron',
-  bnb: 'binance-coin'
+  xrp: 'ripple'
 };
 
-// Route pour la configuration (maintenant dynamique)
-app.get('/api/config', async (req, res) => {
+async function updateMarketPrices() {
+  console.log("CRON JOB: Démarrage de la mise à jour des prix...");
   try {
-    const now = Date.now();
-    let pricesFromApi;
+    const configDoc = await db.collection('configuration').doc('rates_and_fees').get();
+    if (!configDoc.exists) {
+        throw new Error("Le document de configuration est introuvable.");
+    }
+    const { marginPercentage } = configDoc.data();
+    
+    const ids = Object.values(coinGeckoMapping).join(',');
+    const apiUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=xof`;
+    
+    const response = await axios.get(apiUrl);
+    const marketPrices = response.data;
 
-    // 1. Vérifier le cache
-    if (cache.prices && (now - cache.lastFetch < CACHE_DURATION)) {
-      pricesFromApi = cache.prices;
-    } else {
-      // 2. Si le cache est vide ou expiré, appeler l'API CoinGecko
-      const ids = Object.values(coinGeckoMapping).join(',');
-      const apiUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=xof`;
-      
-      const response = await axios.get(apiUrl);
-      const rawPrices = response.data;
+    const atexPrices = {};
+    const margin = marginPercentage / 100;
 
-      // 3. Formater les prix pour notre application
-      pricesFromApi = {};
-      for (const symbol in coinGeckoMapping) {
-        const coingeckoId = coinGeckoMapping[symbol];
-        if (rawPrices[coingeckoId]) {
-          pricesFromApi[symbol] = rawPrices[coingeckoId].xof;
-        }
+    for (const symbol in coinGeckoMapping) {
+      const coingeckoId = coinGeckoMapping[symbol];
+      if (marketPrices[coingeckoId] && marketPrices[coingeckoId].xof) {
+        const marketPrice = marketPrices[coingeckoId].xof;
+        atexPrices[symbol] = {
+          buy: marketPrice * (1 + margin),
+          sell: marketPrice * (1 - margin)
+        };
       }
-      
-      // 4. Mettre à jour notre cache
-      cache.prices = pricesFromApi;
-      cache.lastFetch = now;
     }
 
-    // 5. Récupérer la configuration des frais depuis Firestore
-    const docRef = db.collection('configuration').doc('rates_and_fees');
-    const doc = await docRef.get();
-    if (!doc.exists) {
-      return res.status(404).json({ message: "Le document de configuration des frais est introuvable." });
-    }
-    const feeConfig = doc.data();
-
-    // 6. Envoyer la configuration complète au frontend
-    res.status(200).json({ 
-      marketRates: pricesFromApi,
-      fees: feeConfig
+    const pricesDocRef = db.collection('market_data').doc('live_prices');
+    await pricesDocRef.set({
+      prices: atexPrices,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
     });
 
+    console.log("CRON JOB: ✅ Succès ! Les prix ATEX ont été mis à jour.");
+    return "Update successful";
   } catch (error) {
-    console.error("Erreur lors de la récupération de la configuration dynamique:", error);
-    // En cas d'erreur de l'API externe, on peut utiliser le cache si disponible
-    if (cache.prices) {
-        const docRef = db.collection('configuration').doc('rates_and_fees');
-        const doc = await docRef.get();
-        const feeConfig = doc.data();
-        res.status(200).json({ marketRates: cache.prices, fees: feeConfig });
-        return;
+    console.error("CRON JOB: ❌ Erreur lors de la mise à jour des prix:", error.message);
+    throw error;
+  }
+}
+
+// ================= NOUVELLE ROUTE SECRÈTE POUR LE CRON =================
+app.post('/api/cron/update-prices', async (req, res) => {
+    try {
+        const cronSecret = process.env.CRON_SECRET;
+        const providedSecret = req.headers['authorization'];
+
+        if (!cronSecret || providedSecret !== `Bearer ${cronSecret}`) {
+            return res.status(401).send('Unauthorized');
+        }
+
+        await updateMarketPrices();
+        res.status(200).send('Prices updated successfully.');
+
+    } catch (error) {
+        res.status(500).send('Error updating prices.');
     }
-    res.status(500).json({ message: "Erreur interne du serveur lors de la récupération des prix." });
+});
+
+
+// Route pour la configuration (lit simplement Firestore)
+app.get('/api/config', async (req, res) => {
+  try {
+    const feesDocRef = db.collection('configuration').doc('rates_and_fees');
+    const feesDoc = await feesDocRef.get();
+    const feeConfig = feesDoc.data();
+
+    const pricesDocRef = db.collection('market_data').doc('live_prices');
+    const pricesDoc = await pricesDocRef.get();
+    if (!pricesDoc.exists) {
+      return res.status(404).json({ message: "Les prix du marché ne sont pas encore disponibles. Réessayez dans quelques minutes." });
+    }
+    const atexPrices = pricesDoc.data().prices;
+    
+    res.status(200).json({ 
+      atexPrices: atexPrices,
+      fees: feeConfig
+    });
+  } catch (error) {
+    console.error("Erreur lors de la récupération de la configuration:", error);
+    res.status(500).json({ message: "Erreur interne du serveur." });
   }
 });
 
-// ================= FIN DE LA NOUVELLE LOGIQUE =================
 
-
-// Route pour les transactions (écrit toujours dans Firestore)
+// Route pour les transactions
 app.post('/api/initiate-transaction', async (req, res) => {
   try {
     const transactionData = req.body;
@@ -143,7 +157,7 @@ app.post('/api/initiate-transaction', async (req, res) => {
   }
 });
 
-// Routes de contenu (lisent Sanity)
+// Routes de contenu Sanity
 app.get('/api/press-articles', async (req, res) => {
   const query = `*[_type == "pressArticle"]{ title, url, excerpt, "imageUrl": mainImage.asset->url, category, publishedDate, readingTime } | order(publishedDate desc)`;
   try {
