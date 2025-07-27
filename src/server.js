@@ -41,6 +41,9 @@ const coinGeckoMapping = {
   xrp: 'ripple'
 };
 
+// On définit un taux de change USD -> XOF (FCFA) fixe. C'est plus stable.
+const USD_TO_XOF_RATE = 615;
+
 async function updateMarketPrices() {
   console.log("CRON JOB: Démarrage de la mise à jour des prix...");
   try {
@@ -51,31 +54,38 @@ async function updateMarketPrices() {
     const { marginPercentage } = configDoc.data();
     
     const ids = Object.values(coinGeckoMapping).join(',');
-    
     const apiKey = process.env.COINGECKO_API_KEY;
     if (!apiKey) {
-        throw new Error("La clé d'API CoinGecko n'est pas définie dans les variables d'environnement.");
+        throw new Error("La clé d'API CoinGecko n'est pas définie.");
     }
-    const apiUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=xof&x_cg_demo_api_key=${apiKey}`;
+
+    // ON DEMANDE LES PRIX EN USD
+    const apiUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&x_cg_demo_api_key=${apiKey}`;
     
     const response = await axios.get(apiUrl);
     const marketPrices = response.data;
-
-    // LIGNE DE DÉBUG AJOUTÉE
-    console.log("Réponse BRUTE de CoinGecko:", JSON.stringify(marketPrices, null, 2));
 
     const atexPrices = {};
     const margin = marginPercentage / 100;
 
     for (const symbol in coinGeckoMapping) {
       const coingeckoId = coinGeckoMapping[symbol];
-      if (marketPrices[coingeckoId] && marketPrices[coingeckoId].xof) {
-        const marketPrice = marketPrices[coingeckoId].xof;
+      // ON VÉRIFIE MAINTENANT LE PRIX EN USD
+      if (marketPrices[coingeckoId] && marketPrices[coingeckoId].usd) {
+        const marketPriceUSD = marketPrices[coingeckoId].usd;
+        // ON CONVERTIT EN FCFA
+        const marketPriceXOF = marketPriceUSD * USD_TO_XOF_RATE;
+
         atexPrices[symbol] = {
-          buy: marketPrice * (1 + margin),
-          sell: marketPrice * (1 - margin)
+          buy: marketPriceXOF * (1 + margin),
+          sell: marketPriceXOF * (1 - margin)
         };
       }
+    }
+
+    // On vérifie que l'objet n'est pas vide avant de sauvegarder
+    if (Object.keys(atexPrices).length === 0) {
+        throw new Error("L'objet des prix calculés est vide après traitement. La réponse de l'API était peut-être anormale.");
     }
 
     const pricesDocRef = db.collection('market_data').doc('live_prices');
