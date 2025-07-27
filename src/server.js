@@ -51,7 +51,13 @@ async function updateMarketPrices() {
     const { marginPercentage } = configDoc.data();
     
     const ids = Object.values(coinGeckoMapping).join(',');
-    const apiUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=xof`;
+    
+    // NOUVELLE URL AVEC LA CLÉ D'API
+    const apiKey = process.env.COINGECKO_API_KEY;
+    if (!apiKey) {
+        throw new Error("La clé d'API CoinGecko n'est pas définie dans les variables d'environnement.");
+    }
+    const apiUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=xof&x_cg_demo_api_key=${apiKey}`;
     
     const response = await axios.get(apiUrl);
     const marketPrices = response.data;
@@ -79,7 +85,7 @@ async function updateMarketPrices() {
     console.log("CRON JOB: ✅ Succès ! Les prix ATEX ont été mis à jour.");
     return "Update successful";
   } catch (error) {
-    console.error("CRON JOB: ❌ Erreur lors de la mise à jour des prix:", error.message);
+    console.error("CRON JOB: ❌ Erreur lors de la mise à jour des prix:", error.response ? error.response.data : error.message);
     throw error;
   }
 }
@@ -102,8 +108,7 @@ app.post('/api/cron/update-prices', async (req, res) => {
     }
 });
 
-
-// Route pour la configuration (lit simplement Firestore)
+// Route pour la configuration (ne change pas)
 app.get('/api/config', async (req, res) => {
   try {
     const feesDocRef = db.collection('configuration').doc('rates_and_fees');
@@ -113,7 +118,15 @@ app.get('/api/config', async (req, res) => {
     const pricesDocRef = db.collection('market_data').doc('live_prices');
     const pricesDoc = await pricesDocRef.get();
     if (!pricesDoc.exists) {
-      return res.status(404).json({ message: "Les prix du marché ne sont pas encore disponibles. Réessayez dans quelques minutes." });
+      // On tente de lancer le worker manuellement une fois au cas où
+      console.log("Les prix n'existent pas, tentative de lancement manuel du worker...");
+      await updateMarketPrices();
+      const newPricesDoc = await pricesDocRef.get();
+      if (!newPricesDoc.exists) {
+          return res.status(404).json({ message: "Les prix du marché ne sont pas encore disponibles." });
+      }
+      const atexPrices = newPricesDoc.data().prices;
+      return res.status(200).json({ atexPrices: atexPrices, fees: feeConfig });
     }
     const atexPrices = pricesDoc.data().prices;
     
@@ -127,12 +140,11 @@ app.get('/api/config', async (req, res) => {
   }
 });
 
-
 // Route pour les transactions
 app.post('/api/initiate-transaction', async (req, res) => {
   try {
     const transactionData = req.body;
-    if (!transactionData.type || !transactionData.amountToSend || !transactionData.paymentMethod) {
+    if (!transactionData.type || !transactionData.amountToSend || !transactionData.paymentMethod || !transactionData.amountToReceive) {
       return res.status(400).json({ message: "Données de transaction manquantes ou invalides." });
     }
     const transactionToSave = {
