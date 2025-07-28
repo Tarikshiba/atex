@@ -331,9 +331,9 @@
                 </div>
 
                 <div class="text-center mt-12">
-                    <button class="border-2 border-soft-gold text-deep-night font-medium py-3 px-8 rounded-lg hover:bg-soft-gold hover:bg-opacity-10 transition-all">
-                        Voir plus d'articles
-                    </button>
+                   <button id="load-more-press" class="border-2 border-soft-gold text-deep-night font-medium py-3 px-8 rounded-lg hover:bg-soft-gold hover:bg-opacity-10 transition-all">
+                             Voir plus d'articles
+                   </button>
                 </div>
             </div>
         </section>
@@ -491,66 +491,51 @@
     </footer>
 
     <div id="auth-modal" class="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4 hidden modal">
-        <div class="bg-white rounded-2xl w-full max-w-md">
-            <div class="p-6 border-b border-gray-200">
-                <div class="flex justify-between items-center">
-                    <h3 class="text-2xl font-bold text-deep-night">Rejoignez la communauté ATEX</h3>
-                    <button id="close-modal" class="text-warm-gray hover:text-deep-night">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                
-                <div class="flex mt-6">
-                    <button id="signup-tab" class="tab-active py-2 px-4 font-semibold text-deep-night">S'inscrire</button>
-                    <button id="login-tab" class="py-2 px-4 font-semibold text-warm-gray">Se connecter</button>
-                </div>
+    <div class="bg-white rounded-2xl w-full max-w-md">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex justify-between items-center">
+                <h3 class="text-2xl font-bold text-deep-night">Rejoignez la communauté ATEX</h3>
+                <button id="close-modal" class="text-warm-gray hover:text-deep-night">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
             
-            <div class="p-6">
-                <div class="flex space-x-4 mb-6">
-                    <button class="flex-1 bg-gray-100 text-deep-night py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors">
-                        <i class="fab fa-google mr-2"></i> Google
-                    </button>
-                    <button class="flex-1 bg-gray-100 text-deep-night py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors">
-                        <i class="fab fa-facebook mr-2"></i> Facebook
-                    </button>
-                </div>
-                
-                <div class="flex items-center my-6">
-                    <div class="flex-grow border-t border-gray-200"></div>
-                    <span class="mx-4 text-warm-gray">OU</span>
-                    <div class="flex-grow border-t border-gray-200"></div>
-                </div>
-                
-                <form id="signup-form">
-                    <div class="mb-4">
-                        <input type="text" placeholder="Nom d'utilisateur" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
-                    </div>
-                    <div class="mb-4">
-                        <input type="email" placeholder="Adresse e-mail" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
-                    </div>
-                    <div class="mb-6">
-                        <input type="password" placeholder="Mot de passe" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
-                    </div>
-                    <button class="w-full bg-soft-gold text-deep-night font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
-                        Créer mon compte
-                    </button>
-                </form>
-                
-                <form id="login-form" class="hidden">
-                    <div class="mb-4">
-                        <input type="email" placeholder="Adresse e-mail" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
-                    </div>
-                    <div class="mb-6">
-                        <input type="password" placeholder="Mot de passe" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent">
-                    </div>
-                    <button class="w-full bg-soft-gold text-deep-night font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
-                        Se connecter
-                    </button>
-                </form>
+            <div class="flex mt-6">
+                <button id="signup-tab" class="tab-active py-2 px-4 font-semibold text-deep-night">S'inscrire</button>
+                <button id="login-tab" class="py-2 px-4 font-semibold text-warm-gray">Se connecter</button>
             </div>
         </div>
+        
+        <div class="p-6">
+            <form id="signup-form">
+                <div class="mb-4">
+                    <input type="text" id="signup-username" placeholder="Nom d'utilisateur" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" required>
+                </div>
+                <div class="mb-4">
+                    <input type="email" id="signup-email" placeholder="Adresse e-mail" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" required>
+                </div>
+                <div class="mb-6">
+                    <input type="password" id="signup-password" placeholder="Mot de passe" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" required>
+                </div>
+                <button type="submit" class="w-full bg-soft-gold text-deep-night font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
+                    Créer mon compte
+                </button>
+            </form>
+            
+            <form id="login-form" class="hidden">
+                <div class="mb-4">
+                    <input type="email" id="login-email" placeholder="Adresse e-mail" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" required>
+                </div>
+                <div class="mb-6">
+                    <input type="password" id="login-password" placeholder="Mot de passe" class="w-full py-3 px-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-soft-gold focus:border-transparent" required>
+                </div>
+                <button type="submit" class="w-full bg-soft-gold text-deep-night font-semibold py-3 rounded-lg hover:bg-opacity-90 transition-all">
+                    Se connecter
+                </button>
+            </form>
+        </div>
     </div>
+</div>
 
    <div id="notification-container" class="fixed top-5 right-5 z-[100] space-y-2"></div>
 

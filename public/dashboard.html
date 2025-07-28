@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon Compte - ATEX</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Un peu de style pour le tableau */
+        .table-auto { width: 100%; }
+        .thead-light th { background-color: #f8f9fa; }
+    </style>
+</head>
+<body class="bg-gray-100 font-inter">
+
+    <div class="max-w-7xl mx-auto py-12 px-4">
+        
+       <div class="flex justify-between items-center mb-8">
+    <div>
+        <h1 class="text-4xl font-bold text-deep-night">Mon Tableau de Bord</h1>
+        <p id="welcome-message" class="text-xl text-warm-gray mt-2"></p>
+    </div>
+    <div class="flex items-center space-x-4">
+        <a href="/" class="text-blue-600 hover:underline">&larr; Retour à l'accueil</a>
+        <button id="logout-button" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600">
+            Déconnexion
+        </button>
+    </div>
+</div>
+        
+        <div class="bg-white rounded-lg shadow p-8">
+            <h2 class="text-2xl font-semibold text-deep-night mb-6">Historique des transactions</h2>
+            
+            <div id="transaction-history">
+                <p class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin fa-2x text-soft-gold"></i>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>
