@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon Profil - ATEX</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100 font-inter">
+
+    <div class="max-w-4xl mx-auto py-12 px-4">
+        
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-4xl font-bold text-deep-night">Mon Profil</h1>
+                <p id="welcome-message" class="text-xl text-warm-gray mt-2"></p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <a href="/dashboard.html" class="text-blue-600 hover:underline">&larr; Retour au tableau de bord</a>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-8 mb-8">
+            <h2 class="text-2xl font-semibold text-deep-night mb-6">Changer le mot de passe</h2>
+            <form id="change-password-form" class="space-y-4">
+                <div>
+                    <label for="current-password" class="block text-sm font-medium text-gray-700">Ancien mot de passe</label>
+                    <input type="password" id="current-password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <div>
+                    <label for="new-password" class="block text-sm font-medium text-gray-700">Nouveau mot de passe</label>
+                    <input type="password" id="new-password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <div>
+                    <label for="confirm-password" class="block text-sm font-medium text-gray-700">Confirmer le nouveau mot de passe</label>
+                    <input type="password" id="confirm-password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <button type="submit" class="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600">
+                    Mettre à jour le mot de passe
+                </button>
+                <p id="password-feedback" class="text-sm text-center h-4"></p>
+            </form>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-8">
+            <h2 class="text-2xl font-semibold text-deep-night mb-6">Mes Adresses de Portefeuille</h2>
+            <form id="wallets-form" class="space-y-4">
+                <div>
+                    <label for="btc-wallet" class="block text-sm font-medium text-gray-700">Adresse Bitcoin (BTC)</label>
+                    <input type="text" id="btc-wallet" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <div>
+                    <label for="usdt-wallet" class="block text-sm font-medium text-gray-700">Adresse USDT (TRC-20)</label>
+                    <input type="text" id="usdt-wallet" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <button type="submit" class="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600">
+                    Enregistrer mes adresses
+                </button>
+                 <p id="wallets-feedback" class="text-sm text-center h-4"></p>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/profile.js"></script> </body>
+</html>

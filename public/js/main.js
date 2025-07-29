@@ -21,26 +21,35 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     let pressArticlePage = 1; // Variable pour suivre la page des articles
 
-    // ================= GESTION DE L'ÉTAT DE CONNEXION (V2) =================
-    const token = localStorage.getItem('atex-token');
-    const authButton = document.getElementById('auth-button');
-    const authModal = document.getElementById('auth-modal');
+   // ================= GESTION DE L'ÉTAT DE CONNEXION (V2) =================
+const token = localStorage.getItem('atex-token');
+const authModal = document.getElementById('auth-modal');
 
-    if (token) {
-        if (authButton) {
-            authButton.textContent = 'Mon Compte';
-            authButton.addEventListener('click', (e) => {
+if (token) {
+    // Si l'utilisateur est connecté
+    const desktopButton = document.getElementById('auth-button');
+    const mobileButton = document.getElementById('mobile-auth-button'); // On sélectionne aussi le bouton mobile
+
+    // On applique la même logique aux deux boutons
+    [desktopButton, mobileButton].forEach(button => {
+        if (button) {
+            button.textContent = 'Mon Compte';
+            // On s'assure que le clic redirige bien vers le tableau de bord
+            button.addEventListener('click', (e) => {
                 e.preventDefault();
                 window.location.href = '/dashboard.html';
             });
         }
-    } else {
-        if (authModal) {
-            document.querySelectorAll('#auth-button, #mobile-auth-button, #cta-button').forEach(btn => {
-                if(btn) btn.addEventListener('click', () => authModal.classList.remove('hidden'))
-            });
-        }
+    });
+} else {
+    // Si l'utilisateur n'est pas connecté
+    if (authModal) {
+        // La logique existante pour ouvrir la modale de connexion est déjà correcte
+        document.querySelectorAll('#auth-button, #mobile-auth-button, #cta-button').forEach(btn => {
+            if(btn) btn.addEventListener('click', () => authModal.classList.remove('hidden'))
+        });
     }
+}
 
     // === FONCTION POUR LES NOTIFICATIONS ===
     function showNotification(message, type = 'info') {
@@ -258,60 +267,71 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     async function handleInitiateTransaction() {
-        const currentType = state.transaction.type;
-        const button = currentType === 'buy' ? initiateBuyBtn : initiateSellBtn;
-        let isFormValid = true;
-        let errorMessage = '';
-        if (currentType === 'buy') {
-            if (!validateAmount(buyAmountInput, 'buy-amount-error') || !validateWalletAddress(buyWalletAddressInput, 'buy-wallet-error')) {
-                isFormValid = false;
-                errorMessage = 'Veuillez corriger les erreurs dans le formulaire.';
-            } else if (!state.transaction.paymentMethod) {
-                isFormValid = false;
-                errorMessage = 'Veuillez choisir un moyen de paiement.';
-            }
-        } else {
-            if (!validateAmount(sellAmountInput, 'sell-amount-error') || !validatePhoneNumber(sellPhoneNumberInput, 'sell-phone-error')) {
-                isFormValid = false;
-                errorMessage = 'Veuillez corriger les erreurs dans le formulaire.';
-            } else if (!state.transaction.paymentMethod) {
-                isFormValid = false;
-                errorMessage = 'Veuillez choisir un moyen de réception.';
-            }
+    const currentType = state.transaction.type;
+    const button = currentType === 'buy' ? initiateBuyBtn : initiateSellBtn;
+    let isFormValid = true;
+    let errorMessage = '';
+    if (currentType === 'buy') {
+        if (!validateAmount(buyAmountInput, 'buy-amount-error') || !validateWalletAddress(buyWalletAddressInput, 'buy-wallet-error')) {
+            isFormValid = false;
+            errorMessage = 'Veuillez corriger les erreurs dans le formulaire.';
+        } else if (!state.transaction.paymentMethod) {
+            isFormValid = false;
+            errorMessage = 'Veuillez choisir un moyen de paiement.';
         }
-        if (!isFormValid) {
-            showNotification(errorMessage, 'error');
-            return;
-        }
-        const originalButtonText = button.innerHTML;
-        button.disabled = true;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Initialisation...';
-        try {
-            const token = localStorage.getItem('atex-token');
-            const headers = { 'Content-Type': 'application/json' };
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-            state.transaction.walletAddress = buyWalletAddressInput.value;
-            state.transaction.phoneNumber = sellPhoneNumberInput.value;
-            const response = await fetch('/api/initiate-transaction', {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify(state.transaction)
-            });
-            const result = await response.json();
-            if (!response.ok) {
-                throw new Error(result.message || 'La réponse du serveur n\'est pas OK');
-            }
-            window.location.href = result.whatsappUrl;
-        } catch (error) {
-            console.error('Erreur lors de l\'initiation de la transaction:', error);
-            showNotification(`Une erreur est survenue : ${error.message}`, 'error');
-        } finally {
-            button.disabled = false;
-            button.innerHTML = originalButtonText;
+    } else {
+        if (!validateAmount(sellAmountInput, 'sell-amount-error') || !validatePhoneNumber(sellPhoneNumberInput, 'sell-phone-error')) {
+            isFormValid = false;
+            errorMessage = 'Veuilles corriger les erreurs dans le formulaire.';
+        } else if (!state.transaction.paymentMethod) {
+            isFormValid = false;
+            errorMessage = 'Veuillez choisir un moyen de réception.';
         }
     }
+    if (!isFormValid) {
+        showNotification(errorMessage, 'error');
+        return;
+    }
+    const originalButtonText = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Initialisation...';
+    try {
+        const token = localStorage.getItem('atex-token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        state.transaction.walletAddress = buyWalletAddressInput.value;
+        state.transaction.phoneNumber = sellPhoneNumberInput.value;
+        const response = await fetch('/api/initiate-transaction', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(state.transaction)
+        });
+        
+        // ===============================================
+        //  NOUVELLE GESTION D'ERREUR AMÉLIORÉE
+        // ===============================================
+        if (!response.ok) {
+            // Si la réponse n'est pas OK (ex: 403 Limite Atteinte, 500 Erreur Serveur)
+            // On récupère le message d'erreur spécifique envoyé par le backend
+            const errorResult = await response.json();
+            throw new Error(errorResult.message || `Une erreur est survenue (code: ${response.status})`);
+        }
+
+        // Si tout est OK, on récupère les données et on redirige
+        const result = await response.json();
+        window.location.href = result.whatsappUrl;
+
+    } catch (error) {
+        console.error('Erreur lors de l\'initiation de la transaction:', error);
+        // Ta fonction de notification est parfaite pour afficher n'importe quel message d'erreur
+        showNotification(error.message, 'error');
+    } finally {
+        button.disabled = false;
+        button.innerHTML = originalButtonText;
+    }
+}
 
     function renderPressArticles(articles, append = false) {
         const container = document.getElementById('press-articles-container');

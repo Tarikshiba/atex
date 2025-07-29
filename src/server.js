@@ -1,4 +1,7 @@
 // Importer les dépendances nécessaires
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 const admin = require('firebase-admin');
 const cors = require('cors');
@@ -15,6 +18,46 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 const db = admin.firestore();
+
+// --- NOUVELLE CONFIGURATION DES SERVICES EXTERNES ---
+// Cloudinary
+cloudinary.config({ 
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
+  api_key: process.env.CLOUDINARY_API_KEY, 
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true
+});
+// Multer (pour gérer les uploads en mémoire)
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+// Telegram
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+
+
+// --- FONCTION HELPER POUR CALCULER LE VOLUME MENSUEL DE VENTE ---
+async function calculateUserMonthlyVolume(userId) {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const transactionsRef = db.collection('transactions')
+        .where('status', '==', 'completed')
+        .where('userId', '==', userId)
+        .where('createdAt', '>=', startOfMonth)
+        .where('createdAt', '<=', endOfMonth);
+    
+    const snapshot = await transactionsRef.get();
+
+    let monthlyVolume = 0;
+    snapshot.forEach(doc => {
+        const tx = doc.data();
+        // CORRECTION : On ne somme que les transactions de type 'sell'
+        if (tx.type === 'sell') {
+            monthlyVolume += Number(tx.amountToReceive); // L'utilisateur reçoit des FCFA
+        }
+    });
+    return monthlyVolume;
+}
 
 // --- CONFIGURATION DE SANITY ---
 const client = createClient({
@@ -46,6 +89,30 @@ const verifyToken = (req, res, next) => {
         if (err) {
             return res.status(403).json({ message: "Token invalide." });
         }
+        req.user = user;
+        next();
+    });
+};
+
+// ================= MIDDLEWARE DE VÉRIFICATION ADMIN =================
+const verifyAdminToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ message: "Accès non autorisé : token manquant." });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ message: "Token invalide." });
+        }
+        
+        // On vérifie que l'utilisateur a bien le rôle d'admin
+        if (user.role !== 'admin') {
+            return res.status(403).json({ message: "Accès refusé. Rôle administrateur requis." });
+        }
+        
         req.user = user;
         next();
     });
@@ -104,6 +171,186 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+
+// ===============================================
+// ROUTE DE CONNEXION POUR L'ADMINISTRATEUR
+// ===============================================
+app.post('/api/admin/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Email et mot de passe requis.' });
+    }
+
+    try {
+        const usersRef = db.collection('users');
+        const snapshot = await usersRef.where('email', '==', email).limit(1).get();
+
+        if (snapshot.empty) {
+            return res.status(401).json({ message: 'Identifiants invalides.' });
+        }
+
+        const userDoc = snapshot.docs[0];
+        const user = userDoc.data();
+
+        // ----> VÉRIFICATION CRUCIALE DU RÔLE <----
+        if (user.role !== 'admin') {
+            return res.status(403).json({ message: 'Accès non autorisé.' });
+        }
+
+        const isPasswordCorrect = await bcrypt.compare(password, user.passwordHash);
+
+        if (!isPasswordCorrect) {
+            return res.status(401).json({ message: 'Identifiants invalides.' });
+        }
+
+        const token = jwt.sign(
+            { userId: userDoc.id, email: user.email, role: user.role }, // On inclut le rôle dans le token
+            process.env.JWT_SECRET,
+            { expiresIn: '3h' } // Durée de vie plus courte pour les sessions admin
+        );
+
+        res.status(200).json({ message: 'Connexion admin réussie', token });
+
+    } catch (error) {
+        console.error("Erreur de connexion admin:", error);
+        res.status(500).json({ message: 'Erreur serveur.' });
+    }
+});
+
+// ================= ROUTES API ADMIN (transactions) =================
+// CORRECTION : Ajout d'un filtre pour ignorer les données potentiellement corrompues
+app.get('/api/admin/transactions/pending', verifyAdminToken, async (req, res) => {
+    try {
+        const transactionsRef = db.collection('transactions').where('status', '==', 'pending').orderBy('createdAt', 'desc');
+        const snapshot = await transactionsRef.get();
+
+        if (snapshot.empty) {
+            return res.status(200).json([]);
+        }
+
+        const transactions = snapshot.docs.map(doc => {
+            const data = doc.data();
+            
+            // LA CORRECTION CRUCIALE EST ICI
+            // On transforme l'objet Date de Firebase en un format simple
+            if (data.createdAt && data.createdAt.toDate) {
+                data.createdAt = {
+                    _seconds: data.createdAt.seconds,
+                    _nanoseconds: data.createdAt.nanoseconds
+                };
+            }
+            
+            return {
+                id: doc.id,
+                ...data
+            };
+        });
+
+        res.status(200).json(transactions);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des transactions en attente:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// Route pour mettre à jour le statut d'une transaction
+app.put('/api/admin/transactions/:id/status', verifyAdminToken, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // On vérifie que le statut envoyé est valide
+    if (!status || !['completed', 'cancelled'].includes(status)) {
+        return res.status(400).json({ message: 'Statut invalide.' });
+    }
+
+    try {
+        const transactionRef = db.collection('transactions').doc(id);
+        const doc = await transactionRef.get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ message: 'Transaction introuvable.' });
+        }
+
+        // On met à jour le statut dans Firestore
+        await transactionRef.update({ status: status });
+
+        res.status(200).json({ message: `Transaction marquée comme : ${status}` });
+
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour du statut de la transaction:", error);
+        res.status(500).json({ message: 'Erreur serveur.' });
+    }
+});
+
+// ================= ROUTES API ADMIN (tarification) =================
+
+// Route pour récupérer la structure de prix de référence
+app.get('/api/admin/pricing/manual', verifyAdminToken, async (req, res) => {
+    try {
+        const docRef = db.collection('configuration').doc('manual_pricing');
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+            return res.status(200).json({ 
+                usdt_base_prices_xof: {}, 
+                crypto_prices_usdt: {} 
+            });
+        }
+        
+        res.status(200).json(doc.data());
+
+    } catch (error) {
+        console.error("Erreur lors de la récupération des prix manuels:", error);
+        res.status(500).json({ message: 'Erreur serveur.' });
+    }
+});
+
+// Route pour définir la nouvelle structure de prix de référence
+app.post('/api/admin/pricing/manual', verifyAdminToken, async (req, res) => {
+    const receivedPrices = req.body;
+    
+    // 1. On isole le prix de l'USDT en FCFA
+    const usdt_base_prices_xof = {
+        buy: parseFloat(receivedPrices['usdt-buy-price']) || 0,
+        sell: parseFloat(receivedPrices['usdt-sell-price']) || 0,
+    };
+
+    // 2. On isole les prix des autres cryptos en USDT
+    const crypto_prices_usdt = {};
+    const otherCryptos = ['btc', 'eth', 'bnb', 'trx', 'xrp'];
+    
+    for (const crypto of otherCryptos) {
+        const buyPrice = parseFloat(receivedPrices[`${crypto}-buy-price`]);
+        const sellPrice = parseFloat(receivedPrices[`${crypto}-sell-price`]);
+
+        if (!isNaN(buyPrice) && !isNaN(sellPrice)) {
+            crypto_prices_usdt[crypto] = {
+                buy: buyPrice,
+                sell: sellPrice
+            };
+        }
+    }
+
+    try {
+        const docRef = db.collection('configuration').doc('manual_pricing');
+        
+        // 3. On sauvegarde la nouvelle structure dans Firestore
+        await docRef.set({
+            usdt_base_prices_xof,
+            crypto_prices_usdt,
+            lastUpdatedBy: req.user.email,
+            lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        res.status(200).json({ message: 'Les prix de référence ont été mis à jour avec succès.' });
+
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour des prix manuels:", error);
+        res.status(500).json({ message: 'Erreur serveur.' });
+    }
+});
+
 // ================= ROUTES UTILISATEUR (V2) =================
 app.get('/api/user/transactions', verifyToken, async (req, res) => {
     try {
@@ -137,10 +384,221 @@ app.get('/api/user/me', verifyToken, async (req, res) => {
         if (!userDoc.exists) {
             return res.status(404).json({ message: "Utilisateur introuvable." });
         }
-        const { username, email } = userDoc.data();
-        res.status(200).json({ username, email });
+        // On renvoie toutes les données de l'utilisateur (sauf le mot de passe)
+        const userData = userDoc.data();
+        delete userData.passwordHash; 
+        res.status(200).json(userData);
     } catch (error) {
         res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// Route pour calculer le volume de transaction du mois en cours
+app.get('/api/user/transaction-volume', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // 1. Définir les dates de début et de fin du mois en cours
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+        // 2. Requête pour trouver les transactions complétées de l'utilisateur dans cet intervalle
+        const transactionsRef = db.collection('transactions')
+            .where('userId', '==', userId)
+            .where('status', '==', 'completed')
+            .where('createdAt', '>=', startOfMonth)
+            .where('createdAt', '<=', endOfMonth);
+        
+        const snapshot = await transactionsRef.get();
+
+        // 3. Calculer le volume total
+        let monthlyVolume = 0;
+        snapshot.forEach(doc => {
+            const tx = doc.data();
+            // Le volume est toujours la contre-valeur en FCFA
+            if (tx.type === 'buy') {
+                monthlyVolume += Number(tx.amountToSend); // L'utilisateur paie en FCFA
+            } else if (tx.type === 'sell') {
+                monthlyVolume += Number(tx.amountToReceive); // L'utilisateur reçoit des FCFA
+            }
+        });
+
+        res.status(200).json({ monthlyVolume });
+
+    } catch (error) {
+        console.error("Erreur lors du calcul du volume de transaction:", error);
+        res.status(500).json({ message: "Erreur serveur lors du calcul du volume." });
+    }
+});
+
+// ================= ROUTES PROFIL UTILISATEUR =================
+
+// Récupérer les adresses de portefeuille de l'utilisateur
+app.get('/api/user/wallets', verifyToken, async (req, res) => {
+    const userId = req.user.id;
+    try {
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ message: "Utilisateur introuvable." });
+        }
+        // Renvoie l'objet wallets, ou un objet vide s'il n'existe pas
+        const wallets = userDoc.data().wallets || {};
+        res.status(200).json(wallets);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des portefeuilles:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// Mettre à jour le mot de passe de l'utilisateur
+app.post('/api/user/change-password', verifyToken, async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
+
+    if (!currentPassword || !newPassword || newPassword.length < 6) {
+        return res.status(400).json({ message: "Veuillez fournir un mot de passe actuel et un nouveau mot de passe de 6 caractères minimum." });
+    }
+
+    try {
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+
+        if (!userDoc.exists) {
+            return res.status(404).json({ message: "Utilisateur introuvable." });
+        }
+
+        const userData = userDoc.data();
+
+        // 1. Vérifier que l'ancien mot de passe est correct
+        const isMatch = await bcrypt.compare(currentPassword, userData.passwordHash);
+        if (!isMatch) {
+            return res.status(400).json({ message: "L'ancien mot de passe est incorrect." });
+        }
+
+        // 2. Hasher le nouveau mot de passe
+        const salt = await bcrypt.genSalt(10);
+        const newPasswordHash = await bcrypt.hash(newPassword, salt);
+
+        // 3. Mettre à jour dans Firestore
+        await userRef.update({ passwordHash: newPasswordHash });
+
+        res.status(200).json({ message: "Mot de passe mis à jour avec succès." });
+
+    } catch (error) {
+        console.error("Erreur lors du changement de mot de passe:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// Enregistrer les adresses de portefeuille de l'utilisateur
+app.post('/api/user/save-wallets', verifyToken, async (req, res) => {
+    const { btcWallet, usdtWallet } = req.body;
+    const userId = req.user.id;
+
+    try {
+        const userRef = db.collection('users').doc(userId);
+
+        // On stocke les adresses dans un objet "wallets" pour garder le document propre
+        await userRef.set({
+            wallets: {
+                btc: btcWallet || '',
+                usdt_trc20: usdtWallet || ''
+            }
+        }, { merge: true }); // merge: true pour ne pas écraser les autres champs
+
+        res.status(200).json({ message: "Adresses de portefeuille enregistrées avec succès." });
+        
+    } catch (error) {
+        console.error("Erreur lors de la sauvegarde des portefeuilles:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// ================= ROUTES KYC UTILISATEUR =================
+
+// Récupérer le statut KYC de l'utilisateur
+app.get('/api/user/kyc-status', verifyToken, async (req, res) => {
+    const userId = req.user.id;
+    try {
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ message: "Utilisateur introuvable." });
+        }
+        // Renvoie le statut KYC, ou 'none' s'il n'existe pas
+        const kycStatus = userDoc.data().kyc_status || 'none';
+        res.status(200).json({ status: kycStatus });
+    } catch (error) {
+        console.error("Erreur lors de la récupération du statut KYC:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// Soumettre une demande de vérification KYC avancée avec upload de fichiers
+app.post('/api/user/kyc-request', verifyToken, upload.fields([
+    { name: 'docRecto', maxCount: 1 },
+    { name: 'docVerso', maxCount: 1 },
+    { name: 'selfie', maxCount: 1 }
+]), async (req, res) => {
+
+    const userId = req.user.id;
+    const { firstName, lastName } = req.body;
+
+    try {
+        // Validation : s'assurer que les 3 fichiers sont bien là
+        if (!req.files || !req.files.docRecto || !req.files.docVerso || !req.files.selfie) {
+            return res.status(400).json({ message: "Les trois fichiers sont requis." });
+        }
+
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) return res.status(404).json({ message: "Utilisateur introuvable." });
+        
+        const userData = userDoc.data();
+        if (userData.kyc_status === 'submitted' || userData.kyc_status === 'verified') {
+            return res.status(400).json({ message: 'Vous avez déjà une demande en cours ou votre compte est déjà vérifié.' });
+        }
+
+        // Fonction helper pour uploader un fichier sur Cloudinary
+        const uploadToCloudinary = (file) => {
+            return new Promise((resolve, reject) => {
+                const uploadStream = cloudinary.uploader.upload_stream({ folder: `kyc_requests/${userId}` }, (error, result) => {
+                    if (error) return reject(error);
+                    resolve(result.secure_url);
+                });
+                uploadStream.end(file.buffer);
+            });
+        };
+
+        // 1. Uploader les images sur Cloudinary en parallèle
+        const [docRectoUrl, docVersoUrl, selfieUrl] = await Promise.all([
+            uploadToCloudinary(req.files.docRecto[0]),
+            uploadToCloudinary(req.files.docVerso[0]),
+            uploadToCloudinary(req.files.selfie[0])
+        ]);
+
+        // 2. Envoyer la notification sur Telegram
+        const message = `
+*Nouvelle Demande de Vérification KYC*
+--------------------------------------
+*Utilisateur:* ${userData.email} (ID: ${userId})
+*Nom:* ${firstName} ${lastName}
+--------------------------------------
+*Documents:*
+- [Recto CNI](${docRectoUrl})
+- [Verso CNI](${docVersoUrl})
+- [Selfie](${selfieUrl})
+        `;
+        await bot.sendMessage(process.env.TELEGRAM_CHAT_ID, message, { parse_mode: 'Markdown' });
+
+        // 3. Mettre à jour le statut de l'utilisateur
+        await userRef.update({ kyc_status: 'submitted' });
+
+        res.status(200).json({ message: 'Votre demande de vérification a bien été envoyée.' });
+
+    } catch (error) {
+        console.error("Erreur lors de la soumission KYC avancée:", error);
+        res.status(500).json({ message: 'Erreur serveur lors de la soumission de vos documents.' });
     }
 });
 
@@ -154,126 +612,96 @@ const coinGeckoMapping = {
 };
 const USD_TO_XOF_RATE = 615;
 
-async function updateMarketPrices() {
-  console.log("CRON JOB: Démarrage de la mise à jour des prix...");
-  try {
-    const configDoc = await db.collection('configuration').doc('rates_and_fees').get();
-    if (!configDoc.exists) { throw new Error("Le document de configuration est introuvable."); }
-    const { marginPercentage } = configDoc.data();
-    const ids = Object.values(coinGeckoMapping).join(',');
-    const apiKey = process.env.COINGECKO_API_KEY;
-    if (!apiKey) { throw new Error("La clé d'API CoinGecko n'est pas définie."); }
-    const apiUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&x_cg_demo_api_key=${apiKey}`;
-    const response = await axios.get(apiUrl);
-    const marketPrices = response.data;
-    const atexPrices = {};
-    const margin = marginPercentage / 100;
-    for (const symbol in coinGeckoMapping) {
-      const coingeckoId = coinGeckoMapping[symbol];
-      if (marketPrices[coingeckoId] && marketPrices[coingeckoId].usd) {
-        const marketPriceUSD = marketPrices[coingeckoId].usd;
-        const marketPriceXOF = marketPriceUSD * USD_TO_XOF_RATE;
-        atexPrices[symbol] = {
-          buy: marketPriceXOF * (1 + margin),
-          sell: marketPriceXOF * (1 - margin)
-        };
-      }
-    }
-    if (Object.keys(atexPrices).length === 0) { throw new Error("L'objet des prix calculés est vide après traitement."); }
-    const pricesDocRef = db.collection('market_data').doc('live_prices');
-    await pricesDocRef.set({
-      prices: atexPrices,
-      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-    });
-    console.log("CRON JOB: ✅ Succès ! Les prix ATEX ont été mis à jour.");
-    return "Update successful";
-  } catch (error) {
-    console.error("CRON JOB: ❌ Erreur lors de la mise à jour des prix:", error.response ? error.response.data : error.message);
-    throw error;
-  }
-}
-
-// ================= ROUTES DE LA V1 (avec mises à jour) =================
-app.post('/api/cron/update-prices', async (req, res) => {
-    try {
-        const cronSecret = process.env.CRON_SECRET;
-        const providedSecret = req.headers['authorization'];
-        if (!cronSecret || providedSecret !== `Bearer ${cronSecret}`) {
-            return res.status(401).send('Unauthorized');
-        }
-        await updateMarketPrices();
-        res.status(200).send('Prices updated successfully.');
-    } catch (error) {
-        res.status(500).send('Error updating prices.');
-    }
-});
-
 app.get('/api/config', async (req, res) => {
-  try {
-    const feesDocRef = db.collection('configuration').doc('rates_and_fees');
-    const feesDoc = await feesDocRef.get();
-    const feeConfig = feesDoc.data();
-    const pricesDocRef = db.collection('market_data').doc('live_prices');
-    const pricesDoc = await pricesDocRef.get();
-    if (!pricesDoc.exists) {
-      console.log("Les prix n'existent pas, tentative de lancement manuel du worker...");
-      await updateMarketPrices();
-      const newPricesDoc = await pricesDocRef.get();
-      if (!newPricesDoc.exists) {
-          return res.status(404).json({ message: "Les prix du marché ne sont pas encore disponibles." });
-      }
-      const atexPrices = newPricesDoc.data().prices;
-      return res.status(200).json({ atexPrices: atexPrices, fees: feeConfig });
+    try {
+        // Étape 1 : Récupérer les prix manuels définis par l'admin
+        const pricingDocRef = db.collection('configuration').doc('manual_pricing');
+        const pricingDoc = await pricingDocRef.get();
+
+        if (!pricingDoc.exists) {
+            throw new Error("Les prix de référence manuels ne sont pas configurés.");
+        }
+
+        const { usdt_base_prices_xof, crypto_prices_usdt } = pricingDoc.data();
+
+        if (!usdt_base_prices_xof || !crypto_prices_usdt) {
+            throw new Error("La structure des prix de référence est invalide.");
+        }
+
+        // Étape 2 : Calculer les prix finaux en FCFA pour le client
+        const finalAtexPrices = {};
+
+        // Le prix de l'USDT est déjà en FCFA
+        finalAtexPrices.usdt = {
+            buy: usdt_base_prices_xof.buy,
+            sell: usdt_base_prices_xof.sell
+        };
+
+        // Calculer les prix des autres cryptos
+        for (const crypto in crypto_prices_usdt) {
+            const usdtPrice = crypto_prices_usdt[crypto];
+            finalAtexPrices[crypto] = {
+                buy: usdtPrice.buy * usdt_base_prices_xof.buy,
+                sell: usdtPrice.sell * usdt_base_prices_xof.sell
+            };
+        }
+        
+        // On n'a plus besoin de récupérer 'rates_and_fees' car la marge est incluse dans les prix manuels
+        res.status(200).json({ atexPrices: finalAtexPrices });
+
+    } catch (error) {
+        console.error("Erreur lors de la construction de la configuration des prix:", error);
+        res.status(500).json({ message: "Erreur de configuration des prix. Contactez l'administrateur." });
     }
-    const atexPrices = pricesDoc.data().prices;
-    res.status(200).json({ 
-      atexPrices: atexPrices,
-      fees: feeConfig
-    });
-  } catch (error) {
-    console.error("Erreur lors de la récupération de la configuration:", error);
-    res.status(500).json({ message: "Erreur interne du serveur." });
-  }
 });
 
-app.post('/api/initiate-transaction', (req, res) => {
+app.post('/api/initiate-transaction', verifyToken, async (req, res) => {
     try {
-        let userId = null;
-        const authHeader = req.headers['authorization'];
-        if (authHeader) {
-            const token = authHeader.split(' ')[1];
-            if (token) {
-                try {
-                    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-                    userId = decoded.id;
-                } catch (jwtError) {
-                    console.warn("Token JWT invalide fourni lors de l'initiation de la transaction:", jwtError.message);
-                }
+        const userId = req.user.id;
+        const transactionData = req.body;
+
+        if (!transactionData.type || !transactionData.amountToSend || !transactionData.paymentMethod || !transactionData.amountToReceive) {
+            return res.status(400).json({ message: "Données de transaction manquantes ou invalides." });
+        }
+        
+        // CORRECTION : La vérification ne s'applique que pour les ventes ('sell')
+        if (transactionData.type === 'sell') {
+            const USER_LIMIT = 100000;
+            const currentTransactionAmount = Number(transactionData.amountToReceive);
+            const existingVolume = await calculateUserMonthlyVolume(userId);
+
+            if ((existingVolume + currentTransactionAmount) > USER_LIMIT) {
+                return res.status(403).json({ 
+                    message: `Limite de vente mensuelle de ${USER_LIMIT.toLocaleString('fr-FR')} FCFA atteinte. Votre volume de vente actuel est de ${existingVolume.toLocaleString('fr-FR')} FCFA.` 
+                });
             }
         }
-        const transactionData = req.body;
-        if (!transactionData.type || !transactionData.amountToSend || !transactionData.paymentMethod || !transactionData.amountToReceive) {
-          return res.status(400).json({ message: "Données de transaction manquantes ou invalides." });
-        }
+
         const transactionToSave = {
           ...transactionData,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           status: 'pending',
           userId: userId
         };
-        db.collection('transactions').add(transactionToSave).then(() => {
-            let message = '';
-            if (transactionData.type === 'buy') {
-              message = `Bonjour ATEX, je souhaite initier un NOUVEL ACHAT :\n- Montant à payer : ${transactionData.amountToSend} FCFA\n- Crypto à recevoir : ${Number(transactionData.amountToReceive).toFixed(6)} ${transactionData.currencyTo}\n- Mon adresse Wallet : ${transactionData.walletAddress}\n- Moyen de paiement : ${transactionData.paymentMethod}`;
-            } else {
-              message = `Bonjour ATEX, je souhaite initier une NOUVELLE VENTE :\n- Montant à envoyer : ${transactionData.amountToSend} ${transactionData.currencyFrom}\n- Montant à recevoir : ${Math.round(transactionData.amountToReceive)} FCFA\n- Mon numéro pour le dépôt : ${transactionData.phoneNumber}\n- Moyen de réception : ${transactionData.paymentMethod}`;
-            }
-            const whatsappNumber = process.env.WHATSAPP_NUMBER;
-            const encodedMessage = encodeURIComponent(message);
-            const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodedMessage}`;
-            res.status(200).json({ whatsappUrl });
-        });
+
+        await db.collection('transactions').add(transactionToSave);
+        
+        // ... (le reste de la fonction ne change pas)
+        let message = '';
+        if (transactionData.type === 'buy') {
+            message = `Bonjour ATEX, je souhaite initier un NOUVEL ACHAT :\n- Montant à payer : ${transactionData.amountToSend} FCFA\n- Crypto à recevoir : ${Number(transactionData.amountToReceive).toFixed(6)} ${transactionData.currencyTo}\n- Mon adresse Wallet : ${transactionData.walletAddress}\n- Moyen de paiement : ${transactionData.paymentMethod}`;
+        } else {
+            message = `Bonjour ATEX, je souhaite initier une NOUVELLE VENTE :\n- Montant à envoyer : ${transactionData.amountToSend} ${transactionData.currencyFrom}\n- Montant à recevoir : ${Math.round(transactionData.amountToReceive)} FCFA\n- Mon numéro pour le dépôt : ${transactionData.phoneNumber}\n- Moyen de réception : ${transactionData.paymentMethod}`;
+        }
+        const whatsappNumber = process.env.WHATSAPP_NUMBER;
+        const encodedMessage = encodeURIComponent(message);
+        const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodedMessage}`;
+        res.status(200).json({ whatsappUrl });
+
     } catch (error) {
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+             return res.status(401).json({ message: "Session invalide ou expirée. Veuillez vous reconnecter." });
+        }
         console.error("Erreur lors de l'initialisation de la transaction:", error);
         res.status(500).json({ message: "Erreur interne du serveur." });
     }
