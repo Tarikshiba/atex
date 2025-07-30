@@ -283,70 +283,45 @@ app.put('/api/admin/transactions/:id/status', verifyAdminToken, async (req, res)
     }
 });
 
-// ================= ROUTES API ADMIN (tarification) =================
+// ================= ROUTES API ADMIN (tarification V4) =================
 
-// Route pour récupérer la structure de prix de référence
-app.get('/api/admin/pricing/manual', verifyAdminToken, async (req, res) => {
+// Route pour récupérer les taux de change manuels
+app.get('/api/admin/pricing/rates', verifyAdminToken, async (req, res) => {
     try {
-        const docRef = db.collection('configuration').doc('manual_pricing');
+        const docRef = db.collection('configuration').doc('manual_rates');
         const doc = await docRef.get();
-
         if (!doc.exists) {
-            return res.status(200).json({ 
-                usdt_base_prices_xof: {}, 
-                crypto_prices_usdt: {} 
-            });
+            return res.status(200).json({ rates: {} });
         }
-        
         res.status(200).json(doc.data());
-
     } catch (error) {
-        console.error("Erreur lors de la récupération des prix manuels:", error);
         res.status(500).json({ message: 'Erreur serveur.' });
     }
 });
 
-// Route pour définir la nouvelle structure de prix de référence
-app.post('/api/admin/pricing/manual', verifyAdminToken, async (req, res) => {
-    const receivedPrices = req.body;
-    
-    // 1. On isole le prix de l'USDT en FCFA
-    const usdt_base_prices_xof = {
-        buy: parseFloat(receivedPrices['usdt-buy-price']) || 0,
-        sell: parseFloat(receivedPrices['usdt-sell-price']) || 0,
-    };
+// Route pour définir les nouveaux taux de change manuels
+app.post('/api/admin/pricing/rates', verifyAdminToken, async (req, res) => {
+    const receivedRates = req.body;
+    const cryptos = ['usdt', 'btc', 'eth', 'bnb', 'trx', 'xrp'];
+    const newRatesObject = {};
 
-    // 2. On isole les prix des autres cryptos en USDT
-    const crypto_prices_usdt = {};
-    const otherCryptos = ['btc', 'eth', 'bnb', 'trx', 'xrp'];
-    
-    for (const crypto of otherCryptos) {
-        const buyPrice = parseFloat(receivedPrices[`${crypto}-buy-price`]);
-        const sellPrice = parseFloat(receivedPrices[`${crypto}-sell-price`]);
-
-        if (!isNaN(buyPrice) && !isNaN(sellPrice)) {
-            crypto_prices_usdt[crypto] = {
-                buy: buyPrice,
-                sell: sellPrice
-            };
+    for (const crypto of cryptos) {
+        const buyRate = parseFloat(receivedRates[`${crypto}-buy-rate`]);
+        const sellRate = parseFloat(receivedRates[`${crypto}-sell-rate`]);
+        if (!isNaN(buyRate) && !isNaN(sellRate)) {
+            newRatesObject[crypto] = { buy: buyRate, sell: sellRate };
         }
     }
 
     try {
-        const docRef = db.collection('configuration').doc('manual_pricing');
-        
-        // 3. On sauvegarde la nouvelle structure dans Firestore
+        const docRef = db.collection('configuration').doc('manual_rates');
         await docRef.set({
-            usdt_base_prices_xof,
-            crypto_prices_usdt,
+            rates: newRatesObject,
             lastUpdatedBy: req.user.email,
             lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
-
-        res.status(200).json({ message: 'Les prix de référence ont été mis à jour avec succès.' });
-
+        res.status(200).json({ message: 'Taux de change mis à jour avec succès.' });
     } catch (error) {
-        console.error("Erreur lors de la mise à jour des prix manuels:", error);
         res.status(500).json({ message: 'Erreur serveur.' });
     }
 });
@@ -602,56 +577,88 @@ app.post('/api/user/kyc-request', verifyToken, upload.fields([
     }
 });
 
-// ================= LOGIQUE DU WORKER INTÉGRÉE (V1) =================
-const coinGeckoMapping = {
-  usdt: 'tether',
-  btc: 'bitcoin',
-  bnb: 'binancecoin',
-  trx: 'tron',
-  xrp: 'ripple'
-};
-const USD_TO_XOF_RATE = 615;
+// ================= LOGIQUE DU WORKER (V4 - PRIX EN USDT) =================
+async function updateMarketPrices() {
+    console.log("Le worker de mise à jour des prix démarre...");
+    try {
+        const coinIds = 'bitcoin,ethereum,tether,binancecoin,tron,ripple';
+        const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price`, {
+            params: {
+                ids: coinIds,
+                vs_currencies: 'usdt',
+            }
+        });
+
+        const prices = response.data;
+        const structuredPrices = {};
+
+        // CORRECTION : On vérifie chaque prix avant de l'ajouter
+        if (prices.bitcoin && prices.bitcoin.usdt) structuredPrices.btc = prices.bitcoin.usdt;
+        if (prices.ethereum && prices.ethereum.usdt) structuredPrices.eth = prices.ethereum.usdt;
+        if (prices.tether && prices.tether.usdt) structuredPrices.usdt = prices.tether.usdt;
+        if (prices.binancecoin && prices.binancecoin.usdt) structuredPrices.bnb = prices.binancecoin.usdt;
+        if (prices.tron && prices.tron.usdt) structuredPrices.trx = prices.tron.usdt;
+        if (prices.ripple && prices.ripple.usdt) structuredPrices.xrp = prices.ripple.usdt;
+
+        if (Object.keys(structuredPrices).length === 0) {
+            throw new Error("Aucun prix valide n'a été récupéré depuis l'API CoinGecko.");
+        }
+
+        const docRef = db.collection('market_data').doc('realtime_usdt_prices');
+        await docRef.set({
+            prices: structuredPrices,
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log("Prix en USDT mis à jour avec succès dans Firestore.");
+
+    } catch (error) {
+        console.error("Erreur dans le worker de mise à jour des prix:", error.message);
+    }
+}
+
+// Route sécurisée pour le cron job externe
+app.post('/api/cron/update-prices', async (req, res) => {
+    try {
+        await updateMarketPrices();
+        res.status(200).send('Prices updated successfully.');
+    } catch (error) {
+        res.status(500).send('Error updating prices.');
+    }
+});
 
 app.get('/api/config', async (req, res) => {
     try {
-        // Étape 1 : Récupérer les prix manuels définis par l'admin
-        const pricingDocRef = db.collection('configuration').doc('manual_pricing');
-        const pricingDoc = await pricingDocRef.get();
+        // 1. Récupérer les prix en temps réel (Crypto -> USDT)
+        const realTimePricesDoc = await db.collection('market_data').doc('realtime_usdt_prices').get();
+        if (!realTimePricesDoc.exists) throw new Error("Prix du marché non disponibles.");
+        const realTimePrices = realTimePricesDoc.data().prices;
 
-        if (!pricingDoc.exists) {
-            throw new Error("Les prix de référence manuels ne sont pas configurés.");
-        }
+        // 2. Récupérer les taux de change manuels (USDT -> FCFA)
+        const manualRatesDoc = await db.collection('configuration').doc('manual_rates').get();
+        if (!manualRatesDoc.exists) throw new Error("Taux de change non configurés par l'admin.");
+        const manualRates = manualRatesDoc.data().rates;
 
-        const { usdt_base_prices_xof, crypto_prices_usdt } = pricingDoc.data();
-
-        if (!usdt_base_prices_xof || !crypto_prices_usdt) {
-            throw new Error("La structure des prix de référence est invalide.");
-        }
-
-        // Étape 2 : Calculer les prix finaux en FCFA pour le client
+        // 3. Calculer les prix finaux en FCFA
         const finalAtexPrices = {};
+        for (const crypto in realTimePrices) {
+            if (manualRates[crypto]) {
+                const priceInUSDT = realTimePrices[crypto];
+                const ratesForCrypto = manualRates[crypto];
 
-        // Le prix de l'USDT est déjà en FCFA
-        finalAtexPrices.usdt = {
-            buy: usdt_base_prices_xof.buy,
-            sell: usdt_base_prices_xof.sell
-        };
-
-        // Calculer les prix des autres cryptos
-        for (const crypto in crypto_prices_usdt) {
-            const usdtPrice = crypto_prices_usdt[crypto];
-            finalAtexPrices[crypto] = {
-                buy: usdtPrice.buy * usdt_base_prices_xof.buy,
-                sell: usdtPrice.sell * usdt_base_prices_xof.sell
-            };
+                finalAtexPrices[crypto] = {
+                    buy: priceInUSDT * ratesForCrypto.buy,
+                    sell: priceInUSDT * ratesForCrypto.sell
+                };
+            }
         }
         
-        // On n'a plus besoin de récupérer 'rates_and_fees' car la marge est incluse dans les prix manuels
         res.status(200).json({ atexPrices: finalAtexPrices });
 
     } catch (error) {
         console.error("Erreur lors de la construction de la configuration des prix:", error);
-        res.status(500).json({ message: "Erreur de configuration des prix. Contactez l'administrateur." });
+        // On relance le worker au cas où les prix temps réel seraient manquants
+        updateMarketPrices().catch(console.error);
+        res.status(500).json({ message: "Erreur de configuration des prix. Veuillez réessayer dans un instant." });
     }
 });
 
@@ -765,6 +772,18 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
+// --- GESTION DES ROUTES FRONTEND ET DÉMARRAGE ---
+// Cette route "catch-all" doit être la DERNIÈRE route de votre fichier, juste avant app.listen.
+// Elle sert à renvoyer votre fichier index.html pour n'importe quelle URL non interceptée par l'API.
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
+// On exécute le worker une première fois au démarrage pour garantir des prix frais.
+console.log("Exécution initiale du worker de prix au démarrage du serveur...");
+updateMarketPrices();
+
+// Démarrage du serveur.
 app.listen(PORT, () => {
   console.log(`Le serveur ATEX écoute sur le port ${PORT}`);
 });
