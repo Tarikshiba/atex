@@ -90,77 +90,89 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // =========================================================
-    // SECTION MISE À JOUR : LOGIQUE DE LA TARIFICATION DE RÉFÉRENCE
-    // =========================================================
-    const pricingForm = document.getElementById('pricing-form');
-    const pricingFeedback = document.getElementById('pricing-feedback');
-    const allCryptos = ['usdt', 'btc', 'eth', 'bnb', 'trx', 'xrp']; 
+// SECTION : LOGIQUE DE LA TARIFICATION (V4 - Taux de change)
+// =========================================================
+const pricingForm = document.getElementById('pricing-form');
+const pricingFeedback = document.getElementById('pricing-feedback');
+// La liste des cryptos que nous gérons
+const allCryptos = ['usdt', 'btc', 'eth', 'bnb', 'trx', 'xrp']; 
 
-    // Fonction pour charger les prix et remplir le formulaire
-    const fetchAndDisplayManualPrice = async () => {
-        try {
-            const response = await fetch('/api/admin/pricing/manual', { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!response.ok) throw new Error('Erreur de récupération des prix.');
-            
-            const data = await response.json();
-            const usdtPrices = data.usdt_base_prices_xof || {};
-            const cryptoPrices = data.crypto_prices_usdt || {};
-
-            // Remplir les prix de l'USDT en FCFA
-            document.getElementById('usdt-buy-price').value = usdtPrices.buy || '';
-            document.getElementById('usdt-sell-price').value = usdtPrices.sell || '';
-
-            // Remplir les prix des autres cryptos en USDT
-            for (const crypto of allCryptos) {
-                if (crypto === 'usdt') continue; // On saute l'USDT ici
-                const buyInput = document.getElementById(`${crypto}-buy-price`);
-                const sellInput = document.getElementById(`${crypto}-sell-price`);
-                if (cryptoPrices[crypto]) {
-                    if (buyInput) buyInput.value = cryptoPrices[crypto].buy || '';
-                    if (sellInput) sellInput.value = cryptoPrices[crypto].sell || '';
-                }
-            }
-        } catch (error) {
-            pricingFeedback.textContent = 'Erreur de chargement des prix.';
-            pricingFeedback.className = 'mt-3 text-center text-sm h-4 text-red-500';
-        }
-    };
-
-    // Écouteur pour la soumission du nouveau formulaire de prix
-    pricingForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        pricingFeedback.textContent = 'Enregistrement...';
-        pricingFeedback.className = 'mt-3 text-center text-sm h-4 text-yellow-400';
+// Fonction pour charger les taux actuels et remplir le formulaire
+const fetchAndDisplayRates = async () => {
+    try {
+        // On appelle la nouvelle route pour récupérer les taux
+        const response = await fetch('/api/admin/pricing/rates', { 
+            headers: { 'Authorization': `Bearer ${token}` } 
+        });
         
-        const bodyData = {};
-        // On récupère les valeurs de tous les champs
-        for (const crypto of allCryptos) {
-            const buyInput = document.getElementById(`${crypto}-buy-price`);
-            const sellInput = document.getElementById(`${crypto}-sell-price`);
-            if (buyInput) bodyData[`${crypto}-buy-price`] = buyInput.value;
-            if (sellInput) bodyData[`${crypto}-sell-price`] = sellInput.value;
-        }
-
-        try {
-            const response = await fetch('/api/admin/pricing/manual', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(bodyData)
-            });
-            const result = await response.json();
-            if (!response.ok) {
-                throw new Error(result.message || 'Une erreur est survenue.');
+        if (!response.ok) {
+            // Si le document n'existe pas encore, l'API peut renvoyer 200 avec un objet vide,
+            // ce qui n'est pas une erreur, donc on ne lève pas d'erreur ici.
+            // On gère les erreurs serveur (500) ou d'authentification (401, 403).
+            if (response.status >= 400) {
+                 throw new Error('Erreur de récupération des taux.');
             }
-            pricingFeedback.textContent = result.message;
-            pricingFeedback.className = 'mt-3 text-center text-sm h-4 text-green-500';
-
-        } catch (error) {
-            pricingFeedback.textContent = error.message;
-            pricingFeedback.className = 'mt-3 text-center text-sm h-4 text-red-500';
         }
-    });
+        
+        const data = await response.json();
+        const rates = data.rates || {}; // On s'assure que rates est un objet
 
-    // --- LANCEMENT INITIAL DES FONCTIONS ---
-    fetchPendingTransactions();
-    fetchAndDisplayManualPrice();
+        // Remplir le formulaire avec les taux récupérés
+        for (const crypto of allCryptos) {
+            const buyInput = document.getElementById(`${crypto}-buy-rate`);
+            const sellInput = document.getElementById(`${crypto}-sell-rate`);
+            
+            if (rates[crypto]) {
+                if (buyInput) buyInput.value = rates[crypto].buy || '';
+                if (sellInput) sellInput.value = rates[crypto].sell || '';
+            }
+        }
+    } catch (error) {
+        pricingFeedback.textContent = 'Erreur de chargement des taux.';
+        pricingFeedback.className = 'mt-3 text-center text-sm h-4 text-red-500';
+    }
+};
+
+// Écouteur pour la soumission du formulaire des nouveaux taux
+pricingForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    pricingFeedback.textContent = 'Enregistrement...';
+    pricingFeedback.className = 'mt-3 text-center text-sm h-4 text-yellow-400';
+    
+    const bodyData = {};
+    // On récupère les valeurs de tous les champs avec les nouveaux IDs
+    for (const crypto of allCryptos) {
+        const buyInput = document.getElementById(`${crypto}-buy-rate`);
+        const sellInput = document.getElementById(`${crypto}-sell-rate`);
+        
+        // La clé doit correspondre à ce que le backend attend (ex: 'btc-buy-rate')
+        if (buyInput) bodyData[buyInput.name] = buyInput.value;
+        if (sellInput) bodyData[sellInput.name] = sellInput.value;
+    }
+
+    try {
+        // On poste les données vers la nouvelle route
+        const response = await fetch('/api/admin/pricing/rates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify(bodyData)
+        });
+        
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.message || 'Une erreur est survenue.');
+        }
+        
+        pricingFeedback.textContent = result.message;
+        pricingFeedback.className = 'mt-3 text-center text-sm h-4 text-green-500';
+
+    } catch (error) {
+        pricingFeedback.textContent = error.message;
+        pricingFeedback.className = 'mt-3 text-center text-sm h-4 text-red-500';
+    }
+});
+
+// --- LANCEMENT INITIAL DES FONCTIONS ---
+fetchPendingTransactions();
+fetchAndDisplayRates(); // On appelle la nouvelle fonction de chargement
 });

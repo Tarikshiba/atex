@@ -22,60 +22,62 @@
         </div>
 
      <div class="mt-8 bg-gray-800 p-6 rounded-lg shadow-lg">
-    <h2 class="text-xl font-semibold mb-4">Gestion de la Tarification Manuelle</h2>
-    <p class="text-sm text-gray-400 mb-6">L'USDT est la référence. Définissez son prix en FCFA, puis le prix des autres cryptos en USDT.</p>
-    <form id="pricing-form" class="space-y-6">
+    <h2 class="text-xl font-semibold mb-4">Gestion des Taux de Change (USDT ⇆ FCFA)</h2>
+    <p class="text-sm text-gray-400 mb-6">
+        Définissez ici votre marge pour chaque cryptomonnaie. Ces taux seront multipliés par le prix du marché en temps réel (ex: BTC/USDT) pour obtenir le prix final en FCFA.
+    </p>
+    <form id="pricing-form" class="space-y-4">
         
         <div>
-            <label class="font-bold text-yellow-400">USDT (TRC-20) - PRIX EN FCFA</label>
+            <label class="font-bold text-yellow-400">USDT (Tether)</label>
             <div class="grid md:grid-cols-2 gap-4 mt-2">
-                <input type="number" step="any" id="usdt-buy-price" placeholder="Prix d'achat (Ex: 650 FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-                <input type="number" step="any" id="usdt-sell-price" placeholder="Prix de vente (Ex: 630 FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+                <input type="number" step="any" id="usdt-buy-rate" name="usdt-buy-rate" placeholder="Taux d'achat (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+                <input type="number" step="any" id="usdt-sell-rate" name="usdt-sell-rate" placeholder="Taux de vente (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+            </div>
+        </div>
+        
+        <div>
+            <label class="font-bold text-teal-400">BTC (Bitcoin)</label>
+            <div class="grid md:grid-cols-2 gap-4 mt-2">
+                <input type="number" step="any" id="btc-buy-rate" name="btc-buy-rate" placeholder="Taux d'achat (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+                <input type="number" step="any" id="btc-sell-rate" name="btc-sell-rate" placeholder="Taux de vente (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
             </div>
         </div>
 
-        <hr class="border-gray-600">
+        <div>
+            <label class="font-bold text-teal-400">ETH (Ethereum)</label>
+            <div class="grid md:grid-cols-2 gap-4 mt-2">
+                <input type="number" step="any" id="eth-buy-rate" name="eth-buy-rate" placeholder="Taux d'achat (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+                <input type="number" step="any" id="eth-sell-rate" name="eth-sell-rate" placeholder="Taux de vente (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+            </div>
+        </div>
 
-        <h3 class="text-lg font-semibold text-gray-300 pt-2">Autres cryptos - PRIX EN USDT</h3>
+        <div>
+            <label class="font-bold text-teal-400">BNB (Binance Coin)</label>
+            <div class="grid md:grid-cols-2 gap-4 mt-2">
+                <input type="number" step="any" id="bnb-buy-rate" name="bnb-buy-rate" placeholder="Taux d'achat (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+                <input type="number" step="any" id="bnb-sell-rate" name="bnb-sell-rate" placeholder="Taux de vente (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+            </div>
+        </div>
 
         <div>
-            <label class="font-bold text-teal-400">Bitcoin (BTC)</label>
+            <label class="font-bold text-teal-400">TRX (Tron)</label>
             <div class="grid md:grid-cols-2 gap-4 mt-2">
-                <input type="number" step="any" id="btc-buy-price" placeholder="Prix d'achat (en USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-                <input type="number" step="any" id="btc-sell-price" placeholder="Prix de vente (en USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+                <input type="number" step="any" id="trx-buy-rate" name="trx-buy-rate" placeholder="Taux d'achat (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+                <input type="number" step="any" id="trx-sell-rate" name="trx-sell-rate" placeholder="Taux de vente (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
             </div>
         </div>
+
         <div>
-            <label class="font-bold text-teal-400">Ethereum (ETH)</label>
+            <label class="font-bold text-teal-400">XRP (Ripple)</label>
             <div class="grid md:grid-cols-2 gap-4 mt-2">
-                <input type="number" step="any" id="eth-buy-price" placeholder="Prix d'achat (en USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-                <input type="number" step="any" id="eth-sell-price" placeholder="Prix de vente (en USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            </div>
-        </div>
-        <div>
-            <label class="font-bold text-teal-400">Binance Coin (BNB)</label>
-            <div class="grid md:grid-cols-2 gap-4 mt-2">
-                <input type="number" step="any" id="bnb-buy-price" placeholder="Prix d'achat (en USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-                <input type="number" step="any" id="bnb-sell-price" placeholder="Prix de vente (en USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            </div>
-        </div>
-        <div>
-            <label class="font-bold text-teal-400">Tron (TRX)</label>
-            <div class="grid md:grid-cols-2 gap-4 mt-2">
-                <input type="number" step="any" id="trx-buy-price" placeholder="Prix d'achat (en USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-                <input type="number" step="any" id="trx-sell-price" placeholder="Prix de vente (en USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            </div>
-        </div>
-        <div>
-            <label class="font-bold text-teal-400">Ripple (XRP)</label>
-            <div class="grid md:grid-cols-2 gap-4 mt-2">
-                <input type="number" step="any" id="xrp-buy-price" placeholder="Prix d'achat (en USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-                <input type="number" step="any" id="xrp-sell-price" placeholder="Prix de vente (en USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+                <input type="number" step="any" id="xrp-buy-rate" name="xrp-buy-rate" placeholder="Taux d'achat (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+                <input type="number" step="any" id="xrp-sell-rate" name="xrp-sell-rate" placeholder="Taux de vente (FCFA pour 1 USDT)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
             </div>
         </div>
 
         <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 font-medium rounded-lg text-sm px-5 py-2.5 text-center !mt-8">
-            Enregistrer tous les prix
+            Enregistrer les Taux
         </button>
         <p id="pricing-feedback" class="mt-3 text-center text-sm h-4"></p>
     </form>
