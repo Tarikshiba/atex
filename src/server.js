@@ -613,6 +613,7 @@ async function updateMarketPrices() {
 
     } catch (error) {
         console.error("Erreur dans le worker de mise à jour des prix:", error.message);
+        throw error; // On relance l'erreur pour que la route du cron job soit notifiée.
     }
 }
 
