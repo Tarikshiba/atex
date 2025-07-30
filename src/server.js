@@ -780,8 +780,8 @@ app.get('*', (req, res) => {
 });
 
 // On exécute le worker une première fois au démarrage pour garantir des prix frais.
-console.log("Exécution initiale du worker de prix au démarrage du serveur...");
-updateMarketPrices();
+//console.log("Exécution initiale du worker de prix au démarrage du serveur...");
+//updateMarketPrices();
 
 // Démarrage du serveur.
 app.listen(PORT, () => {
