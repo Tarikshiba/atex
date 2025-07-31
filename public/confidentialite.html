@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Politique de Confidentialité - ATEX</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'soft-cream': '#FBFBFB',
+                        'deep-night': '#0D1B3F',
+                        'soft-gold': '#D4AF37',
+                        'forest-green': '#228B22',
+                        'sienna': '#DC2626',
+                        'warm-gray': '#6B7280'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="font-inter bg-soft-cream min-h-screen flex flex-col">
+    <header class="fixed w-full z-50 py-4 px-6 transition-all duration-300" id="header">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center">
+                <a href="index.html" class="flex items-center">
+                    <img src="images/logo.png" alt="ATEX Logo" class="logo-header">
+                </a>
+                <nav class="ml-8 sm:ml-12 hidden md:flex space-x-6 lg:space-x-8">
+                    <a href="index.html#exchange" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors">ATEX-CHANGE</a>
+                    <a href="index.html#press" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors">ATEX-PRESSE</a>
+                    <a href="index.html#knowledge" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors">ATEX-SAVOIR</a>
+                </nav>
+            </div>
+            <div class="flex items-center">
+                <button id="auth-button" class="hidden md:block bg-soft-gold text-deep-night font-medium py-2 px-6 rounded-lg hover:bg-opacity-90 transition-all">
+                    Se Connecter / S'inscrire
+                </button>
+                <button id="mobile-menu-button" class="md:hidden text-deep-night">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow pt-24 bg-white">
+        <div class="max-w-4xl mx-auto py-16 px-4">
+            <h1 class="text-4xl font-bold text-deep-night mb-8">Politique de Confidentialité</h1>
+            <div class="prose max-w-none text-warm-gray space-y-6">
+                <p><strong>Date de la dernière mise à jour :</strong> 30 juillet 2025</p>
+                <p>La protection de vos données personnelles est une priorité absolue pour ATEX. Cette Politique de Confidentialité décrit les types de données que nous collectons, les raisons pour lesquelles nous les collectons, et la manière dont nous les utilisons et les protégeons.</p>
+
+                <h2>Article 1 : Données collectées</h2>
+                <p>Nous collectons plusieurs types d'informations dans le cadre de nos services :</p>
+                <p><strong>1. Informations fournies par l'Utilisateur :</strong></p>
+                <ul>
+                    <li><strong>Données d'inscription :</strong> Nom d'utilisateur, adresse e-mail, mot de passe (qui est immédiatement haché et jamais stocké en clair).</li>
+                    <li><strong>Données de vérification (KYC) :</strong> Nom complet, prénom, et photographies de vos documents d'identité (recto/verso) ainsi qu'un selfie.</li>
+                    <li><strong>Données de transaction :</strong> Adresses de portefeuille de cryptomonnaies, numéros de téléphone pour les paiements mobiles.</li>
+                </ul>
+                <p><strong>2. Informations collectées automatiquement :</strong></p>
+                <ul>
+                    <li><strong>Données de connexion :</strong> Adresse IP, type de navigateur, et informations sur l'appareil utilisé pour accéder à nos services, à des fins de sécurité et de prévention de la fraude.</li>
+                </ul>
+
+                <h2>Article 2 : Utilisation de vos données</h2>
+                <p>Vos données sont utilisées exclusivement pour les finalités suivantes :</p>
+                <ul>
+                    <li><strong>Fournir le Service :</strong> Créer et gérer votre compte, traiter vos transactions.</li>
+                    <li><strong>Vérifier votre identité (KYC) :</strong> Se conformer à nos obligations légales et réglementaires pour prévenir la fraude et le blanchiment d'argent.</li>
+                    <li><strong>Assurer la sécurité :</strong> Protéger votre compte et notre plateforme contre les accès non autorisés.</li>
+                    <li><strong>Communiquer avec vous :</strong> Vous envoyer des informations importantes sur votre compte ou vos transactions.</li>
+                    <li><strong>Support client :</strong> Répondre à vos questions et résoudre les problèmes que vous rencontrez.</li>
+                </ul>
+
+                <h2>Article 3 : Partage des données</h2>
+                <p>ATEX ne vendra, ne louera et ne partagera jamais vos données personnelles à des tiers à des fins marketing. Vos données peuvent être partagées uniquement dans les cas suivants :</p>
+                <ul>
+                    <li><strong>Autorités légales :</strong> Si nous y sommes contraints par la loi, dans le cadre d'une procédure judiciaire ou d'une demande gouvernementale.</li>
+                    <li><strong>Prestataires de services :</strong> Nous pouvons partager des informations avec des tiers de confiance qui nous aident à exploiter nos services (par exemple, Cloudinary pour le stockage sécurisé de vos documents KYC), sous réserve d'accords de confidentialité stricts.</li>
+                </ul>
+
+                <h2>Article 4 : Sécurité des données</h2>
+                <p>Nous mettons en œuvre des mesures de sécurité techniques et organisationnelles robustes pour protéger vos données, notamment : le hachage des mots de passe, le chiffrement des communications (HTTPS/SSL), et le stockage sécurisé de vos documents sur des serveurs protégés.</p>
+
+                <h2>Article 5 : Durée de conservation</h2>
+                <p>Nous conservons vos données personnelles aussi longtemps que votre compte est actif, puis pour une durée supplémentaire si la loi nous l'impose (notamment pour les registres de transactions financières).</p>
+
+                <h2>Article 6 : Vos droits</h2>
+                <p>Conformément à la réglementation en vigueur, vous disposez d'un droit d'accès, de rectification, de suppression et de portabilité de vos données personnelles. Pour exercer ces droits, veuillez nous contacter à l'adresse support@atexly.com.</p>
+                
+                <h2>Article 7 : Cookies</h2>
+                <p>L'utilisation des cookies sur notre site est détaillée dans notre Politique de Cookies.</p>
+
+                <h2>Contact :</h2>
+                <p>Pour toute question relative à cette politique, veuillez nous contacter à l'adresse : support@atexly.com</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-deep-night text-white pt-16 pb-8">
+        </footer>
+    <div id="auth-modal" class="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4 hidden modal">
+        </div>
+    <div id="notification-container" class="fixed top-5 right-5 z-[100] space-y-2"></div>
+    <script src="js/main.js"></script>
+</body>
+</html>

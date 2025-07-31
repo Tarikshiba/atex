@@ -188,6 +188,53 @@ if (token) {
         }
     }
 
+    async function loadAndRenderFaqs() {
+        const container = document.getElementById('faq-accordion');
+        if (!container) return;
+
+        // Affiche un état de chargement
+        container.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin fa-2x text-soft-gold"></i></div>';
+
+        try {
+            const response = await fetch('/api/faqs');
+            if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+            const faqs = await response.json();
+
+            // Vide le conteneur
+            container.innerHTML = '';
+
+            if (!faqs || faqs.length === 0) {
+                container.innerHTML = '<p class="text-center text-warm-gray">Aucune question pour le moment.</p>';
+                return;
+            }
+
+            // Construit le HTML pour chaque FAQ
+            faqs.forEach(faq => {
+                const faqItem = document.createElement('div');
+                faqItem.className = 'border border-gray-200 rounded-lg';
+                faqItem.innerHTML = `
+                    <button class="faq-question w-full flex justify-between items-center text-left p-6">
+                        <span class="text-lg font-semibold text-deep-night">${faq.question}</span>
+                        <i class="fas fa-chevron-down text-soft-gold transition-transform"></i>
+                    </button>
+                    <div class="faq-answer overflow-hidden max-h-0 transition-all duration-500 ease-in-out">
+                        <p class="p-6 pt-0 text-warm-gray">
+                            ${faq.answer}
+                        </p>
+                    </div>
+                `;
+                container.appendChild(faqItem);
+            });
+
+            // Une fois les nouveaux éléments ajoutés, on ré-initialise la logique de l'accordéon
+            initializeFaqAccordion();
+
+        } catch (error) {
+            console.error("Impossible de charger les FAQs:", error);
+            container.innerHTML = `<div class="p-4 text-center bg-red-100 text-red-700 rounded-lg">Impossible de charger les questions.</div>`;
+        }
+    }
+
     // --- LOGIQUE DE RENDU (RENDER) ---
     function renderTestimonials(testimonials) {
         const container = document.getElementById('testimonials-container');
@@ -654,9 +701,9 @@ if (token) {
     }
 
     // --- DÉMARRAGE DE L'APPLICATION ---
-    loadConfiguration();
-    loadPressArticles();
-    loadKnowledgeArticles();
-    loadTestimonials();
-    initializeFaqAccordion();
+loadConfiguration();
+loadPressArticles();
+loadKnowledgeArticles();
+loadTestimonials();
+loadAndRenderFaqs(); 
 });

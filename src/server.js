@@ -768,6 +768,18 @@ app.get('/api/testimonials', async (req, res) => {
   }
 });
 
+app.get('/api/faqs', async (req, res) => {
+  // On trie par date de création pour un ordre cohérent
+  const query = `*[_type == "faq"] | order(_createdAt asc){ question, answer }`;
+  try {
+    const faqs = await client.fetch(query);
+    res.status(200).json(faqs);
+  } catch (error) {
+    console.error("Erreur Sanity (faqs):", error);
+    res.status(500).json({ message: "Erreur lors de la récupération des FAQs." });
+  }
+});
+
 // --- GESTION DES ROUTES FRONTEND ET DÉMARRAGE ---
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));

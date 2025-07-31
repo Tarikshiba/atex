@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conditions d'Utilisation - ATEX</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'soft-cream': '#FBFBFB',
+                        'deep-night': '#0D1B3F',
+                        'soft-gold': '#D4AF37',
+                        'forest-green': '#228B22',
+                        'sienna': '#DC2626',
+                        'warm-gray': '#6B7280'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="font-inter bg-soft-cream min-h-screen flex flex-col">
+    <header class="fixed w-full z-50 py-4 px-6 transition-all duration-300" id="header">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center">
+                <a href="index.html" class="flex items-center">
+                    <img src="images/logo.png" alt="ATEX Logo" class="logo-header">
+                </a>
+                <nav class="ml-8 sm:ml-12 hidden md:flex space-x-6 lg:space-x-8">
+                    <a href="index.html#exchange" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors">ATEX-CHANGE</a>
+                    <a href="index.html#press" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors">ATEX-PRESSE</a>
+                    <a href="index.html#knowledge" class="nav-link font-medium text-deep-night hover:text-soft-gold transition-colors">ATEX-SAVOIR</a>
+                </nav>
+            </div>
+            <div class="flex items-center">
+                <button id="auth-button" class="hidden md:block bg-soft-gold text-deep-night font-medium py-2 px-6 rounded-lg hover:bg-opacity-90 transition-all">
+                    Se Connecter / S'inscrire
+                </button>
+                <button id="mobile-menu-button" class="md:hidden text-deep-night">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+    
+    <div id="mobile-menu" class="mobile-menu fixed inset-0 z-60 bg-deep-night bg-opacity-95 backdrop-blur-sm md:hidden">
+        </div>
+
+    <main class="flex-grow pt-24 bg-white">
+        <div class="max-w-4xl mx-auto py-16 px-4">
+            <h1 class="text-4xl font-bold text-deep-night mb-8">Conditions Générales d'Utilisation (CGU)</h1>
+            <div class="prose max-w-none text-warm-gray space-y-6">
+                <p><strong>Date de la dernière mise à jour :</strong> 30 juillet 2025</p>
+                <p>Bienvenue sur ATEX ! Les présentes Conditions Générales d'Utilisation régissent votre accès et votre utilisation de notre plateforme d'échange de cryptomonnaies. En vous inscrivant ou en utilisant nos services, vous acceptez d'être lié par ces conditions.</p>
+
+                <h2>Article 1 : Définitions</h2>
+                <p>- <strong>Service :</strong> L'ensemble des fonctionnalités fournies par la plateforme ATEX, accessible via notre site web, permettant d'initier des transactions de cryptomonnaies.</p>
+                <p>- <strong>Utilisateur :</strong> Toute personne physique, âgée d'au moins 18 ans et juridiquement capable, qui crée un compte et utilise le Service.</p>
+                <p>- <strong>Plateforme :</strong> Le site web exploité par ATEXLY, accessible à l'adresse https://atexly.com</p>
+                <p>- <strong>KYC (Know Your Customer) :</strong> Le processus de vérification d'identité obligatoire pour utiliser le Service.</p>
+
+                <h2>Article 2 : Objet du Service</h2>
+                <p>Le Service ATEX a pour objet de faciliter la mise en relation d'Utilisateurs souhaitant échanger des cryptomonnaies contre des devises locales (FCFA). La Plateforme fournit les taux de change, le calcul des montants, et un canal de communication pour finaliser la transaction (WhatsApp). ATEX agit en tant qu'intermédiaire de confiance.</p>
+
+                <h2>Article 3 : Inscription et Compte Utilisateur</h2>
+                <p>- L'inscription est gratuite et requiert la création d'un compte.</p>
+                <p>- L'Utilisateur s'engage à fournir des informations exactes, complètes et à jour.</p>
+                <p>- L'Utilisateur est seul responsable de la sécurité de son mot de passe et de son compte. Toute activité effectuée depuis son compte sera considérée comme étant de son fait.</p>
+
+                <h2>Article 4 : Processus de Vérification (KYC)</h2>
+                <p>- Pour des raisons de sécurité et de conformité réglementaire, tout Utilisateur souhaitant effectuer des transactions doit compléter avec succès le processus KYC.</p>
+                <p>- Ce processus implique la soumission de documents d'identité valides (carte d'identité, passeport) et d'un selfie.</p>
+                <p>- ATEX se réserve le droit de refuser ou de suspendre un compte si les informations fournies lors du KYC sont jugées incomplètes, fausses ou suspectes.</p>
+
+                <h2>Article 5 : Obligations de l'Utilisateur</h2>
+                <p>L'Utilisateur s'engage à :</p>
+                <ul>
+                    <li>Ne pas utiliser le Service à des fins illégales (blanchiment d'argent, financement du terrorisme, fraude, etc.).</li>
+                    <li>Respecter les limites de volume de transaction mensuelles imposées par la Plateforme.</li>
+                    <li>Fournir des informations de paiement et des adresses de portefeuille valides et lui appartenant.</li>
+                </ul>
+
+                <h2>Article 6 : Processus de Transaction</h2>
+                <p>1. L'Utilisateur initie une transaction (achat ou vente) sur la Plateforme en spécifiant les montants.</p>
+                <p>2. La Plateforme calcule la contre-valeur basée sur les taux en vigueur.</p>
+                <p>3. La finalisation de la transaction (envoi des fonds, communication des adresses) s'effectue via le canal WhatsApp fourni par ATEX.</p>
+                <p>4. ATEX ne sera pas tenu responsable des erreurs commises par l'Utilisateur lors de la saisie des adresses de portefeuille ou des informations de paiement.</p>
+
+                <h2>Article 7 : Limites de Responsabilité</h2>
+                <p>- ATEX n'est pas un conseiller financier. L'Utilisateur reconnaît que la valeur des cryptomonnaies est extrêmement volatile et qu'il assume seul les risques liés à ses investissements.</p>
+                <p>- La responsabilité d'ATEX se limite à la facilitation de la transaction. En cas de défaillance technique du serveur ou d'interruption du service, ATEX s'engage à mettre tout en œuvre pour résoudre le problème dans les meilleurs délais.</p>
+
+                <h2>Article 8 : Données Personnelles</h2>
+                <p>La collecte et le traitement des données personnelles de l'Utilisateur sont régis par notre Politique de Confidentialité, accessible sur la Plateforme.</p>
+
+                <h2>Article 9 : Modification et Résiliation</h2>
+                <p>- ATEX se réserve le droit de modifier les présentes CGU à tout moment. Les Utilisateurs seront notifiés de tout changement majeur.</p>
+                <p>- ATEX peut suspendre ou clôturer un compte sans préavis en cas de violation grave des présentes CGU.</p>
+
+                <h2>Article 10 : Droit Applicable</h2>
+                <p>Les présentes CGU sont soumises au droit en vigueur au Sénégal. Tout litige relatif à leur interprétation ou exécution relèvera de la compétence des tribunaux de Dakar.</p>
+
+                <h2>Contact :</h2>
+                <p>Pour toute question, veuillez nous contacter à l'adresse : support@atexly.com</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-deep-night text-white pt-16 pb-8">
+        </footer>
+
+    <div id="auth-modal" class="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4 hidden modal">
+        </div>
+    <div id="notification-container" class="fixed top-5 right-5 z-[100] space-y-2"></div>
+    <script src="js/main.js"></script>
+</body>
+</html>
