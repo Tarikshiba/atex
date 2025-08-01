@@ -788,9 +788,9 @@ app.get('*', (req, res) => {
 // --- GESTION DES ROUTES FRONTEND ET DÉMARRAGE ---
 // Cette route "catch-all" doit être la DERNIÈRE route de votre fichier, juste avant app.listen.
 // Elle sert à renvoyer votre fichier index.html pour n'importe quelle URL non interceptée par l'API.
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
-});
+//app.get('*', (req, res) => {
+  //res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+//});
 
 // On exécute le worker une première fois au démarrage pour garantir des prix frais.
 //console.log("Exécution initiale du worker de prix au démarrage du serveur...");
