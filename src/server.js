@@ -579,42 +579,51 @@ app.post('/api/user/kyc-request', verifyToken, upload.fields([
 
 // ================= LOGIQUE DU WORKER (V4 - PRIX EN USDT) =================
 async function updateMarketPrices() {
-    console.log("Le worker de mise à jour des prix démarre...");
-    try {
-        const coinIds = 'bitcoin,ethereum,tether,binancecoin,tron,ripple';
-        const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price`, {
-            params: {
-                ids: coinIds,
-                vs_currencies: 'usdt',
-            }
-        });
+    console.log("Le worker de mise à jour des prix démarre...");
+    try {
+        // Ajout d'une en-tête pour l'API CoinGecko (souvent nécessaire pour les requêtes)
+        const coinIds = 'bitcoin,ethereum,tether,binancecoin,tron,ripple';
+        const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usdt`, {
+            headers: {
+                'accept': 'application/json',
+                'x-cg-demo-api-key': process.env.COINGECKO_API_KEY // Si tu as une clé API, utilise-la ici.
+            }
+        });
 
-        const prices = response.data;
-        const structuredPrices = {};
+        const prices = response.data;
+        const structuredPrices = {};
 
-        // CORRECTION : On vérifie chaque prix avant de l'ajouter
-        if (prices.bitcoin && prices.bitcoin.usdt) structuredPrices.btc = prices.bitcoin.usdt;
-        if (prices.ethereum && prices.ethereum.usdt) structuredPrices.eth = prices.ethereum.usdt;
-        if (prices.tether && prices.tether.usdt) structuredPrices.usdt = prices.tether.usdt;
-        if (prices.binancecoin && prices.binancecoin.usdt) structuredPrices.bnb = prices.binancecoin.usdt;
-        if (prices.tron && prices.tron.usdt) structuredPrices.trx = prices.tron.usdt;
-        if (prices.ripple && prices.ripple.usdt) structuredPrices.xrp = prices.ripple.usdt;
+        // On s'assure que 'prices' est un objet valide et non vide
+        if (!prices || Object.keys(prices).length === 0) {
+            console.warn("Avertissement: L'API CoinGecko a renvoyé une réponse vide ou invalide.");
+            return; // On sort de la fonction sans crasher
+        }
 
-        if (Object.keys(structuredPrices).length === 0) {
-            throw new Error("Aucun prix valide n'a été récupéré depuis l'API CoinGecko.");
-        }
+        // Extraction des prix avec vérification de l'existence des données
+        if (prices.bitcoin && prices.bitcoin.usdt) structuredPrices.btc = prices.bitcoin.usdt;
+        if (prices.ethereum && prices.ethereum.usdt) structuredPrices.eth = prices.ethereum.usdt;
+        if (prices.tether && prices.tether.usdt) structuredPrices.usdt = prices.tether.usdt;
+        if (prices.binancecoin && prices.binancecoin.usdt) structuredPrices.bnb = prices.binancecoin.usdt;
+        if (prices.tron && prices.tron.usdt) structuredPrices.trx = prices.tron.usdt;
+        if (prices.ripple && prices.ripple.usdt) structuredPrices.xrp = prices.ripple.usdt;
 
-        const docRef = db.collection('market_data').doc('realtime_usdt_prices');
-        await docRef.set({
-            prices: structuredPrices,
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-        });
-        console.log("Prix en USDT mis à jour avec succès dans Firestore.");
+        if (Object.keys(structuredPrices).length === 0) {
+            console.warn("Avertissement: Aucun prix valide n'a pu être extrait de la réponse de CoinGecko. Le document Firestore ne sera pas mis à jour.");
+            return; // On sort de la fonction sans crasher
+        }
 
-    } catch (error) {
-        console.error("Erreur dans le worker de mise à jour des prix:", error.message);
-        throw error; // On relance l'erreur pour que la route du cron job soit notifiée.
-    }
+        const docRef = db.collection('market_data').doc('realtime_usdt_prices');
+        await docRef.set({
+            prices: structuredPrices,
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log("Prix en USDT mis à jour avec succès dans Firestore.");
+
+    } catch (error) {
+        // On ne relance plus l'erreur. L'application ne plantera plus.
+        console.error("Erreur dans le worker de mise à jour des prix:", error.message);
+        // Si une erreur réseau se produit, la fonction se termine ici sans crasher.
+   }
 }
 
 // Route sécurisée pour le cron job externe
