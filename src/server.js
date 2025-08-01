@@ -685,7 +685,11 @@ app.post('/api/initiate-transaction', verifyToken, async (req, res) => {
         if (!transactionData.type || !transactionData.amountToSend || !transactionData.paymentMethod || !transactionData.amountToReceive) {
             return res.status(400).json({ message: "Données de transaction manquantes ou invalides." });
         }
-
+        // V---- AJOUTEZ VOTRE NOUVELLE RÈGLE ICI ----V
+        const MIN_ETH_PURCHASE = 35000;
+        if (transactionData.type === 'buy' && transactionData.currencyTo === 'ETH' && transactionData.amountToSend < MIN_ETH_PURCHASE) {
+            return res.status(400).json({ message: `Le montant minimum d'achat pour l'Ethereum est de ${MIN_ETH_PURCHASE.toLocaleString('fr-FR')} FCFA.` });
+        }
         // V---- AJOUTEZ VOTRE NOUVEAU CODE ICI ----V
         const MIN_BTC_PURCHASE = 50000;
         if (transactionData.type === 'buy' && transactionData.currencyTo === 'BTC' && transactionData.amountToSend < MIN_BTC_PURCHASE) {

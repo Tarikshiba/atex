@@ -88,8 +88,9 @@ if (token) {
 
     function validateAmount(inputElement, errorElementId, minAmount = 1) {
     const value = parseFloat(inputElement.value);
-    const selectedCrypto = cryptoSelectBuy.value; // On récupère la crypto sélectionnée
+    const selectedCrypto = cryptoSelectBuy.value;
     const MIN_BTC_PURCHASE = 50000;
+    const MIN_ETH_PURCHASE = 35000; // <-- Ajoutez cette ligne
 
     // Condition de base
     if (inputElement.value.trim() === '' || isNaN(value) || value < minAmount) {
@@ -97,10 +98,16 @@ if (token) {
         return false;
     }
 
-    // V---- AJOUTEZ VOTRE NOUVELLE LOGIQUE ICI ----V
     // Condition spécifique pour l'achat de BTC
     if (state.transaction.type === 'buy' && selectedCrypto === 'btc' && value < MIN_BTC_PURCHASE) {
         showError(errorElementId, `Minimum ${MIN_BTC_PURCHASE.toLocaleString('fr-FR')} FCFA pour le Bitcoin.`);
+        return false;
+    }
+
+    // V---- AJOUTEZ VOTRE NOUVELLE LOGIQUE ICI ----V
+    // Condition spécifique pour l'achat de ETH
+    if (state.transaction.type === 'buy' && selectedCrypto === 'eth' && value < MIN_ETH_PURCHASE) {
+        showError(errorElementId, `Minimum ${MIN_ETH_PURCHASE.toLocaleString('fr-FR')} FCFA pour l'Ethereum.`);
         return false;
     }
     // A---- FIN DE VOTRE NOUVELLE LOGIQUE ----A
