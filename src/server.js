@@ -578,52 +578,57 @@ app.post('/api/user/kyc-request', verifyToken, upload.fields([
 });
 
 // ================= LOGIQUE DU WORKER (V4 - PRIX EN USDT) =================
+// Utilisation de l'API CoinMarketCap
 async function updateMarketPrices() {
-    console.log("Le worker de mise à jour des prix démarre...");
-    try {
-        // Ajout d'une en-tête pour l'API CoinGecko (souvent nécessaire pour les requêtes)
-        const coinIds = 'bitcoin,ethereum,tether,binancecoin,tron,ripple';
-        const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usdt`, {
-            headers: {
-                'accept': 'application/json',
-                'x-cg-demo-api-key': process.env.COINGECKO_API_KEY // Si tu as une clé API, utilise-la ici.
-            }
-        });
+    console.log("Le worker de mise à jour des prix démarre...");
+    try {
+        const coinIds = '1,1027,825,1839,1958,52'; // IDs CoinMarketCap : Bitcoin, Ethereum, Tether, BNB, TRON, Ripple
+        const url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest';
 
-        const prices = response.data;
-        const structuredPrices = {};
+        // NOTE : L'API CoinMarketCap a besoin de la clé API dans les headers
+        const response = await axios.get(url, {
+            params: {
+                id: coinIds,
+                // On garde la devise de comparaison à USDT
+                convert: 'USDT'
+            },
+            headers: {
+                'X-CMC_PRO_API_KEY': process.env.COINMARKETCAP_API_KEY
+            }
+        });
 
-        // On s'assure que 'prices' est un objet valide et non vide
-        if (!prices || Object.keys(prices).length === 0) {
-            console.warn("Avertissement: L'API CoinGecko a renvoyé une réponse vide ou invalide.");
-            return; // On sort de la fonction sans crasher
-        }
+        const prices = response.data.data; // La réponse de CoinMarketCap est dans un objet `data`
+        const structuredPrices = {};
 
-        // Extraction des prix avec vérification de l'existence des données
-        if (prices.bitcoin && prices.bitcoin.usdt) structuredPrices.btc = prices.bitcoin.usdt;
-        if (prices.ethereum && prices.ethereum.usdt) structuredPrices.eth = prices.ethereum.usdt;
-        if (prices.tether && prices.tether.usdt) structuredPrices.usdt = prices.tether.usdt;
-        if (prices.binancecoin && prices.binancecoin.usdt) structuredPrices.bnb = prices.binancecoin.usdt;
-        if (prices.tron && prices.tron.usdt) structuredPrices.trx = prices.tron.usdt;
-        if (prices.ripple && prices.ripple.usdt) structuredPrices.xrp = prices.ripple.usdt;
+        // On s'assure que 'prices' est un objet valide et non vide
+        if (!prices || Object.keys(prices).length === 0) {
+            console.warn("Avertissement: L'API CoinMarketCap a renvoyé une réponse vide ou invalide.");
+            return; // On sort de la fonction sans crasher
+        }
 
-        if (Object.keys(structuredPrices).length === 0) {
-            console.warn("Avertissement: Aucun prix valide n'a pu être extrait de la réponse de CoinGecko. Le document Firestore ne sera pas mis à jour.");
-            return; // On sort de la fonction sans crasher
-        }
+        // Extraction des prix avec vérification de l'existence des données
+        if (prices[1] && prices[1].quote.USDT) structuredPrices.btc = prices[1].quote.USDT.price;
+        if (prices[1027] && prices[1027].quote.USDT) structuredPrices.eth = prices[1027].quote.USDT.price;
+        if (prices[825] && prices[825].quote.USDT) structuredPrices.usdt = prices[825].quote.USDT.price;
+        if (prices[1839] && prices[1839].quote.USDT) structuredPrices.bnb = prices[1839].quote.USDT.price;
+        if (prices[1958] && prices[1958].quote.USDT) structuredPrices.trx = prices[1958].quote.USDT.price;
+        if (prices[52] && prices[52].quote.USDT) structuredPrices.xrp = prices[52].quote.USDT.price;
 
-        const docRef = db.collection('market_data').doc('realtime_usdt_prices');
-        await docRef.set({
-            prices: structuredPrices,
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-        });
-        console.log("Prix en USDT mis à jour avec succès dans Firestore.");
+        if (Object.keys(structuredPrices).length === 0) {
+            console.warn("Avertissement: Aucun prix valide n'a pu être extrait de la réponse de CoinMarketCap. Le document Firestore ne sera pas mis à jour.");
+            return; // On sort de la fonction sans crasher
+        }
 
-    } catch (error) {
-        // On ne relance plus l'erreur. L'application ne plantera plus.
-        console.error("Erreur dans le worker de mise à jour des prix:", error.message);
-        // Si une erreur réseau se produit, la fonction se termine ici sans crasher.
-   }
+        const docRef = db.collection('market_data').doc('realtime_usdt_prices');
+        await docRef.set({
+            prices: structuredPrices,
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log("Prix en USDT mis à jour avec succès dans Firestore via CoinMarketCap.");
+
+    } catch (error) {
+        console.error("Erreur dans le worker de mise à jour des prix (CoinMarketCap):", error.message);
+    }
 }
 
 // Route sécurisée pour le cron job externe
