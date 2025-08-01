@@ -685,7 +685,14 @@ app.post('/api/initiate-transaction', verifyToken, async (req, res) => {
         if (!transactionData.type || !transactionData.amountToSend || !transactionData.paymentMethod || !transactionData.amountToReceive) {
             return res.status(400).json({ message: "Données de transaction manquantes ou invalides." });
         }
-        
+
+        // V---- AJOUTEZ VOTRE NOUVEAU CODE ICI ----V
+        const MIN_BTC_PURCHASE = 50000;
+        if (transactionData.type === 'buy' && transactionData.currencyTo === 'BTC' && transactionData.amountToSend < MIN_BTC_PURCHASE) {
+            return res.status(400).json({ message: `Le montant minimum d'achat pour le Bitcoin est de ${MIN_BTC_PURCHASE.toLocaleString('fr-FR')} FCFA.` });
+        }
+        // A---- FIN DE VOTRE NOUVEAU CODE ----A
+
         // CORRECTION : La vérification ne s'applique que pour les ventes ('sell')
         if (transactionData.type === 'sell') {
             const USER_LIMIT = 100000;

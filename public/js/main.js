@@ -87,14 +87,27 @@ if (token) {
     }
 
     function validateAmount(inputElement, errorElementId, minAmount = 1) {
-        const value = parseFloat(inputElement.value);
-        if (inputElement.value.trim() === '' || isNaN(value) || value < minAmount) {
-            showError(errorElementId, errorMessages.amount);
-            return false;
-        }
-        hideError(errorElementId);
-        return true;
+    const value = parseFloat(inputElement.value);
+    const selectedCrypto = cryptoSelectBuy.value; // On récupère la crypto sélectionnée
+    const MIN_BTC_PURCHASE = 50000;
+
+    // Condition de base
+    if (inputElement.value.trim() === '' || isNaN(value) || value < minAmount) {
+        showError(errorElementId, errorMessages.amount);
+        return false;
     }
+
+    // V---- AJOUTEZ VOTRE NOUVELLE LOGIQUE ICI ----V
+    // Condition spécifique pour l'achat de BTC
+    if (state.transaction.type === 'buy' && selectedCrypto === 'btc' && value < MIN_BTC_PURCHASE) {
+        showError(errorElementId, `Minimum ${MIN_BTC_PURCHASE.toLocaleString('fr-FR')} FCFA pour le Bitcoin.`);
+        return false;
+    }
+    // A---- FIN DE VOTRE NOUVELLE LOGIQUE ----A
+
+    hideError(errorElementId);
+    return true;
+}
 
     function validateWalletAddress(inputElement, errorElementId) {
         if (inputElement.value.trim().length > 0 && inputElement.value.trim().length < 15) {
