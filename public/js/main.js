@@ -391,10 +391,20 @@ if (token) {
         window.location.href = result.whatsappUrl;
 
     } catch (error) {
-        console.error('Erreur lors de l\'initiation de la transaction:', error);
-        // Ta fonction de notification est parfaite pour afficher n'importe quel message d'erreur
-        showNotification(error.message, 'error');
-    } finally {
+    console.error('Erreur lors de l\'initiation de la transaction:', error);
+    showNotification(error.message, 'error');
+
+    // V---- AJOUTEZ CE BLOC ----V
+    // Si l'erreur est "Token invalide", on déconnecte l'utilisateur
+    if (error.message.includes("Token invalide") || error.message.includes("expirée")) {
+        showNotification("Votre session a expiré. Veuillez vous reconnecter.", "info");
+        setTimeout(() => {
+            localStorage.removeItem('atex-token');
+            window.location.reload();
+        }, 2000); // On attend 2 secondes avant de recharger
+    }
+    // A---- FIN DU BLOC ----A
+} finally {
         button.disabled = false;
         button.innerHTML = originalButtonText;
     }
@@ -557,18 +567,48 @@ if (token) {
         }
     }
 
-    function setupStepNavigation(step1BtnId, backBtnId, step1Id, step2Id) {
-        const step1Btn = document.getElementById(step1BtnId);
-        const backBtn = document.getElementById(backBtnId);
-        const step1 = document.getElementById(step1Id);
-        const step2 = document.getElementById(step2Id);
-        if(step1Btn && backBtn && step1 && step2) {
-            step1Btn.addEventListener('click', () => { step1.classList.add('hidden'); step2.classList.remove('hidden'); });
-            backBtn.addEventListener('click', () => { step2.classList.add('hidden'); step1.classList.remove('hidden'); });
+    function setupStepNavigation() {
+    const step1BuyBtn = document.getElementById('buy-step1-btn');
+    const step1SellBtn = document.getElementById('sell-step1-btn');
+    const backBuyBtn = document.getElementById('back-buy-btn');
+    const backSellBtn = document.getElementById('back-sell-btn');
+    const continueAnonymouslyBtn = document.getElementById('continue-anonymously-btn');
+
+    const step1Buy = document.getElementById('step1-buy');
+    const step2Buy = document.getElementById('step2-buy');
+    const step1Sell = document.getElementById('step1-sell');
+    const step2Sell = document.getElementById('step2-sell');
+
+    const goToStep2 = () => {
+        authModal.classList.add('hidden'); // Ferme la modale si elle est ouverte
+        if (state.transaction.type === 'buy') {
+            step1Buy.classList.add('hidden');
+            step2Buy.classList.remove('hidden');
+        } else {
+            step1Sell.classList.add('hidden');
+            step2Sell.classList.remove('hidden');
         }
-    }
-    setupStepNavigation('buy-step1-btn', 'back-buy-btn', 'step1-buy', 'step2-buy');
-    setupStepNavigation('sell-step1-btn', 'back-sell-btn', 'step1-sell', 'step2-sell');
+    };
+
+    const handleStep1Click = () => {
+        const token = localStorage.getItem('atex-token');
+        if (token) {
+            goToStep2();
+        } else {
+            authModal.classList.remove('hidden');
+        }
+    };
+
+    if(step1BuyBtn) step1BuyBtn.addEventListener('click', handleStep1Click);
+    if(step1SellBtn) step1SellBtn.addEventListener('click', handleStep1Click);
+
+    if(backBuyBtn) backBuyBtn.addEventListener('click', () => { step2Buy.classList.add('hidden'); step1Buy.classList.remove('hidden'); });
+    if(backSellBtn) backSellBtn.addEventListener('click', () => { step2Sell.classList.add('hidden'); step1Sell.classList.remove('hidden'); });
+
+    // Notre nouvel écouteur pour continuer sans compte
+    if(continueAnonymouslyBtn) continueAnonymouslyBtn.addEventListener('click', goToStep2);
+}
+setupStepNavigation(); // On appelle la nouvelle fonction unique
 
     document.querySelectorAll('.payment-option').forEach(option => {
         option.addEventListener('click', function() {

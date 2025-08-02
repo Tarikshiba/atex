@@ -118,6 +118,26 @@ const verifyAdminToken = (req, res, next) => {
     });
 };
 
+// ================= MIDDLEWARE D'IDENTIFICATION OPTIONNELLE =================
+const identifyOptionalUser = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        // S'il n'y a pas de token, on continue sans utilisateur
+        return next(); 
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (!err) {
+            // Si le token est valide, on attache l'utilisateur à la requête
+            req.user = user;
+        }
+        // S'il y a une erreur (token invalide/expiré), on continue quand même sans utilisateur
+        next();
+    });
+};
+
 // ================= ROUTES D'AUTHENTIFICATION (V2) =================
 app.post('/api/auth/register', async (req, res) => {
     try {
@@ -677,49 +697,53 @@ app.get('/api/config', async (req, res) => {
     }
 });
 
-app.post('/api/initiate-transaction', verifyToken, async (req, res) => {
+app.post('/api/initiate-transaction', identifyOptionalUser, async (req, res) => {
     try {
-        const userId = req.user.id;
         const transactionData = req.body;
+        let userId = 'anonymous'; // Par défaut, la transaction est anonyme
 
         if (!transactionData.type || !transactionData.amountToSend || !transactionData.paymentMethod || !transactionData.amountToReceive) {
             return res.status(400).json({ message: "Données de transaction manquantes ou invalides." });
         }
-        // V---- AJOUTEZ VOTRE NOUVELLE RÈGLE ICI ----V
-        const MIN_ETH_PURCHASE = 35000;
-        if (transactionData.type === 'buy' && transactionData.currencyTo === 'ETH' && transactionData.amountToSend < MIN_ETH_PURCHASE) {
-            return res.status(400).json({ message: `Le montant minimum d'achat pour l'Ethereum est de ${MIN_ETH_PURCHASE.toLocaleString('fr-FR')} FCFA.` });
-        }
-        // V---- AJOUTEZ VOTRE NOUVEAU CODE ICI ----V
-        const MIN_BTC_PURCHASE = 50000;
-        if (transactionData.type === 'buy' && transactionData.currencyTo === 'BTC' && transactionData.amountToSend < MIN_BTC_PURCHASE) {
-            return res.status(400).json({ message: `Le montant minimum d'achat pour le Bitcoin est de ${MIN_BTC_PURCHASE.toLocaleString('fr-FR')} FCFA.` });
-        }
-        // A---- FIN DE VOTRE NOUVEAU CODE ----A
 
-        // CORRECTION : La vérification ne s'applique que pour les ventes ('sell')
-        if (transactionData.type === 'sell') {
-            const USER_LIMIT = 100000;
-            const currentTransactionAmount = Number(transactionData.amountToReceive);
-            const existingVolume = await calculateUserMonthlyVolume(userId);
+        // Si un utilisateur est identifié, on applique les règles spécifiques
+        if (req.user) {
+            userId = req.user.id;
 
-            if ((existingVolume + currentTransactionAmount) > USER_LIMIT) {
-                return res.status(403).json({ 
-                    message: `Limite de vente mensuelle de ${USER_LIMIT.toLocaleString('fr-FR')} FCFA atteinte. Votre volume de vente actuel est de ${existingVolume.toLocaleString('fr-FR')} FCFA.` 
-                });
+            // Règles de montant minimum
+            const MIN_BTC_PURCHASE = 50000;
+            if (transactionData.type === 'buy' && transactionData.currencyTo === 'BTC' && transactionData.amountToSend < MIN_BTC_PURCHASE) {
+                return res.status(400).json({ message: `Le montant minimum d'achat pour le Bitcoin est de ${MIN_BTC_PURCHASE.toLocaleString('fr-FR')} FCFA.` });
+            }
+            const MIN_ETH_PURCHASE = 35000;
+            if (transactionData.type === 'buy' && transactionData.currencyTo === 'ETH' && transactionData.amountToSend < MIN_ETH_PURCHASE) {
+                return res.status(400).json({ message: `Le montant minimum d'achat pour l'Ethereum est de ${MIN_ETH_PURCHASE.toLocaleString('fr-FR')} FCFA.` });
+            }
+
+            // Règle de la limite de vente mensuelle
+            if (transactionData.type === 'sell') {
+                const USER_LIMIT = 100000;
+                const currentTransactionAmount = Number(transactionData.amountToReceive);
+                const existingVolume = await calculateUserMonthlyVolume(userId);
+
+                if ((existingVolume + currentTransactionAmount) > USER_LIMIT) {
+                    return res.status(403).json({ 
+                        message: `Limite de vente mensuelle de ${USER_LIMIT.toLocaleString('fr-FR')} FCFA atteinte.` 
+                    });
+                }
             }
         }
 
+        // Sauvegarde de la transaction
         const transactionToSave = {
           ...transactionData,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           status: 'pending',
-          userId: userId
+          userId: userId // Sauvegarde avec l'ID de l'utilisateur ou 'anonymous'
         };
-
         await db.collection('transactions').add(transactionToSave);
-        
-        // ... (le reste de la fonction ne change pas)
+
+        // Création de l'URL WhatsApp
         let message = '';
         if (transactionData.type === 'buy') {
             message = `Bonjour ATEX, je souhaite initier un NOUVEL ACHAT :\n- Montant à payer : ${transactionData.amountToSend} FCFA\n- Crypto à recevoir : ${Number(transactionData.amountToReceive).toFixed(6)} ${transactionData.currencyTo}\n- Mon adresse Wallet : ${transactionData.walletAddress}\n- Moyen de paiement : ${transactionData.paymentMethod}`;
@@ -732,9 +756,6 @@ app.post('/api/initiate-transaction', verifyToken, async (req, res) => {
         res.status(200).json({ whatsappUrl });
 
     } catch (error) {
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-             return res.status(401).json({ message: "Session invalide ou expirée. Veuillez vous reconnecter." });
-        }
         console.error("Erreur lors de l'initialisation de la transaction:", error);
         res.status(500).json({ message: "Erreur interne du serveur." });
     }
