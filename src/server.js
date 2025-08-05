@@ -597,54 +597,52 @@ app.post('/api/user/kyc-request', verifyToken, upload.fields([
     }
 });
 
-// ================= LOGIQUE DU WORKER (V6 - API COINCAP FINALE) =================
+// ================= LOGIQUE DU WORKER (V5.1 - COINMARKETCAP ROBUSTE) =================
 async function updateMarketPrices() {
-    console.log("Le worker (CoinCap) de mise à jour des prix démarre...");
+    console.log("Le worker (CoinMarketCap) de mise à jour des prix démarre...");
     try {
-        const coinIds = 'bitcoin,ethereum,tether,binance-coin,tron,xrp,polygon,toncoin';
-        const response = await axios.get(`https://api.coincap.io/v2/assets`, {
-            params: {
-                ids: coinIds,
-            }
+        const coinIds = '1,1027,825,1839,1958,52,3890,11419'; // BTC, ETH, USDT, BNB, TRX, XRP, MATIC, TON
+        const url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest';
+
+        const response = await axios.get(url, {
+            params: { id: coinIds, convert: 'USDT' },
+            headers: { 'X-CMC_PRO_API_KEY': process.env.COINMARKETCAP_API_KEY }
         });
 
-        const assets = response.data.data;
+        const prices = response.data.data;
         const structuredPrices = {};
 
-        if (!assets || assets.length === 0) {
-            throw new Error("Aucun prix valide n'a été récupéré depuis l'API CoinCap.");
+        if (!prices || Object.keys(prices).length === 0) {
+            console.warn("Avertissement: L'API CoinMarketCap a renvoyé une réponse vide ou invalide.");
+            return;
         }
 
-        for (const asset of assets) {
-            const price = parseFloat(asset.priceUsd);
-            if (!isNaN(price)) {
-                switch(asset.id) {
-                    case 'bitcoin': structuredPrices.btc = price; break;
-                    case 'ethereum': structuredPrices.eth = price; break;
-                    case 'tether': structuredPrices.usdt = price; break;
-                    case 'binance-coin': structuredPrices.bnb = price; break;
-                    case 'tron': structuredPrices.trx = price; break;
-                    case 'xrp': structuredPrices.xrp = price; break;
-                    case 'polygon': structuredPrices.matic = price; break;
-                    case 'toncoin': structuredPrices.ton = price; break;
-                }
+        const assignPrice = (id, key) => {
+            const priceData = prices[id]?.quote?.USDT?.price;
+            if (typeof priceData === 'number') { // Vérifie que le prix n'est pas null
+                structuredPrices[key] = priceData;
             }
-        }
+        };
 
-        if (Object.keys(structuredPrices).length < 8) {
-             console.warn(`Avertissement: Toutes les cryptomonnaies n'ont pas pu être récupérées. Reçues: ${Object.keys(structuredPrices).length}/8`);
-        }
+        assignPrice('1', 'btc');
+        assignPrice('1027', 'eth');
+        assignPrice('825', 'usdt');
+        assignPrice('1839', 'bnb');
+        assignPrice('1958', 'trx');
+        assignPrice('52', 'xrp');
+        assignPrice('3890', 'matic');
+        assignPrice('11419', 'ton');
 
         const docRef = db.collection('market_data').doc('realtime_usdt_prices');
         await docRef.set({
             prices: structuredPrices,
             lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-            source: 'CoinCap'
+            source: 'CoinMarketCap'
         });
-        console.log("Prix (via CoinCap) mis à jour avec succès dans Firestore.");
+        console.log("Prix en USDT mis à jour avec succès dans Firestore via CoinMarketCap.");
 
     } catch (error) {
-        console.error("Erreur dans le worker de mise à jour des prix (CoinCap):", error.message);
+        console.error("Erreur dans le worker de mise à jour des prix (CoinMarketCap):", error.message);
         throw error;
     }
 }
