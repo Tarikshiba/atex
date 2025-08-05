@@ -602,8 +602,7 @@ app.post('/api/user/kyc-request', verifyToken, upload.fields([
 async function updateMarketPrices() {
     console.log("Le worker de mise à jour des prix démarre...");
     try {
-        // AJOUT DES NOUVEAUX IDs : 3890 (Polygon), 11419 (Toncoin)
-        const coinIds = '1,1027,825,1839,1958,52,3890,11419'; 
+        const coinIds = '1,1027,825,1839,1958,52,3890,11419'; // BTC, ETH, USDT, BNB, TRX, XRP, MATIC, TON
         const url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest';
 
         const response = await axios.get(url, {
@@ -619,17 +618,22 @@ async function updateMarketPrices() {
             return;
         }
 
-        // Extraction des prix avec les nouvelles cryptos
-        if (prices[1] && prices[1].quote.USDT) structuredPrices.btc = prices[1].quote.USDT.price;
-        if (prices[1027] && prices[1027].quote.USDT) structuredPrices.eth = prices[1027].quote.USDT.price;
-        if (prices[825] && prices[825].quote.USDT) structuredPrices.usdt = prices[825].quote.USDT.price;
-        if (prices[1839] && prices[1839].quote.USDT) structuredPrices.bnb = prices[1839].quote.USDT.price;
-        if (prices[1958] && prices[1958].quote.USDT) structuredPrices.trx = prices[1958].quote.USDT.price;
-        if (prices[52] && prices[52].quote.USDT) structuredPrices.xrp = prices[52].quote.USDT.price;
-        // V---- AJOUTEZ CES LIGNES ----V
-        if (prices[3890] && prices[3890].quote.USDT) structuredPrices.matic = prices[3890].quote.USDT.price;
-        if (prices[11419] && prices[11419].quote.USDT) structuredPrices.ton = prices[11419].quote.USDT.price;
-        // A---- FIN DE L'AJOUT ----A
+        // Fonction interne pour vérifier et assigner le prix
+        const assignPrice = (id, key) => {
+            const priceData = prices[id]?.quote?.USDT?.price;
+            if (typeof priceData === 'number') { // La correction est ici : on vérifie que le prix est bien un nombre
+                structuredPrices[key] = priceData;
+            }
+        };
+
+        assignPrice('1', 'btc');
+        assignPrice('1027', 'eth');
+        assignPrice('825', 'usdt');
+        assignPrice('1839', 'bnb');
+        assignPrice('1958', 'trx');
+        assignPrice('52', 'xrp');
+        assignPrice('3890', 'matic');
+        assignPrice('11419', 'ton');
 
         if (Object.keys(structuredPrices).length === 0) {
             console.warn("Avertissement: Aucun prix valide n'a pu être extrait de la réponse de CoinMarketCap.");
