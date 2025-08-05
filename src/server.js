@@ -322,7 +322,7 @@ app.get('/api/admin/pricing/rates', verifyAdminToken, async (req, res) => {
 // Route pour définir les nouveaux taux de change manuels
 app.post('/api/admin/pricing/rates', verifyAdminToken, async (req, res) => {
     const receivedRates = req.body;
-    const cryptos = ['usdt', 'btc', 'eth', 'bnb', 'trx', 'xrp'];
+    const allCryptos = ['usdt', 'btc', 'eth', 'bnb', 'trx', 'xrp', 'usdt_bep20', 'btc_bep20', 'matic', 'ton'];
     const newRatesObject = {};
 
     for (const crypto of cryptos) {
@@ -602,41 +602,38 @@ app.post('/api/user/kyc-request', verifyToken, upload.fields([
 async function updateMarketPrices() {
     console.log("Le worker de mise à jour des prix démarre...");
     try {
-        const coinIds = '1,1027,825,1839,1958,52'; // IDs CoinMarketCap : Bitcoin, Ethereum, Tether, BNB, TRON, Ripple
+        // AJOUT DES NOUVEAUX IDs : 3890 (Polygon), 11419 (Toncoin)
+        const coinIds = '1,1027,825,1839,1958,52,3890,11419'; 
         const url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest';
 
-        // NOTE : L'API CoinMarketCap a besoin de la clé API dans les headers
         const response = await axios.get(url, {
-            params: {
-                id: coinIds,
-                // On garde la devise de comparaison à USDT
-                convert: 'USDT'
-            },
-            headers: {
-                'X-CMC_PRO_API_KEY': process.env.COINMARKETCAP_API_KEY
-            }
+            params: { id: coinIds, convert: 'USDT' },
+            headers: { 'X-CMC_PRO_API_KEY': process.env.COINMARKETCAP_API_KEY }
         });
 
-        const prices = response.data.data; // La réponse de CoinMarketCap est dans un objet `data`
+        const prices = response.data.data;
         const structuredPrices = {};
 
-        // On s'assure que 'prices' est un objet valide et non vide
         if (!prices || Object.keys(prices).length === 0) {
             console.warn("Avertissement: L'API CoinMarketCap a renvoyé une réponse vide ou invalide.");
-            return; // On sort de la fonction sans crasher
+            return;
         }
 
-        // Extraction des prix avec vérification de l'existence des données
+        // Extraction des prix avec les nouvelles cryptos
         if (prices[1] && prices[1].quote.USDT) structuredPrices.btc = prices[1].quote.USDT.price;
         if (prices[1027] && prices[1027].quote.USDT) structuredPrices.eth = prices[1027].quote.USDT.price;
         if (prices[825] && prices[825].quote.USDT) structuredPrices.usdt = prices[825].quote.USDT.price;
         if (prices[1839] && prices[1839].quote.USDT) structuredPrices.bnb = prices[1839].quote.USDT.price;
         if (prices[1958] && prices[1958].quote.USDT) structuredPrices.trx = prices[1958].quote.USDT.price;
         if (prices[52] && prices[52].quote.USDT) structuredPrices.xrp = prices[52].quote.USDT.price;
+        // V---- AJOUTEZ CES LIGNES ----V
+        if (prices[3890] && prices[3890].quote.USDT) structuredPrices.matic = prices[3890].quote.USDT.price;
+        if (prices[11419] && prices[11419].quote.USDT) structuredPrices.ton = prices[11419].quote.USDT.price;
+        // A---- FIN DE L'AJOUT ----A
 
         if (Object.keys(structuredPrices).length === 0) {
-            console.warn("Avertissement: Aucun prix valide n'a pu être extrait de la réponse de CoinMarketCap. Le document Firestore ne sera pas mis à jour.");
-            return; // On sort de la fonction sans crasher
+            console.warn("Avertissement: Aucun prix valide n'a pu être extrait de la réponse de CoinMarketCap.");
+            return;
         }
 
         const docRef = db.collection('market_data').doc('realtime_usdt_prices');
