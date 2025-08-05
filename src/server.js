@@ -325,7 +325,7 @@ app.post('/api/admin/pricing/rates', verifyAdminToken, async (req, res) => {
     const allCryptos = ['usdt', 'btc', 'eth', 'bnb', 'trx', 'xrp', 'usdt_bep20', 'btc_bep20', 'matic', 'ton'];
     const newRatesObject = {};
 
-    for (const crypto of cryptos) {
+   for (const crypto of allCryptos) {
         const buyRate = parseFloat(receivedRates[`${crypto}-buy-rate`]);
         const sellRate = parseFloat(receivedRates[`${crypto}-sell-rate`]);
         if (!isNaN(buyRate) && !isNaN(sellRate)) {
