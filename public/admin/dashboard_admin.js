@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
 const pricingForm = document.getElementById('pricing-form');
 const pricingFeedback = document.getElementById('pricing-feedback');
 // La liste des cryptos que nous gérons
-const allCryptos = ['usdt', 'btc', 'eth', 'bnb', 'trx', 'xrp']; 
+const allCryptos = ['usdt', 'btc', 'eth', 'bnb', 'trx', 'xrp', 'usdt_bep20', 'btc_bep20', 'matic', 'ton']; 
 
 // Fonction pour charger les taux actuels et remplir le formulaire
 const fetchAndDisplayRates = async () => {
