@@ -2,7 +2,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // State global de l'application
     const state = {
         config: {},
-        transaction: { type: 'buy' }
+        transaction: { type: 'buy' },
+        pressArticles: [],      // Pour stocker tous les articles de presse chargés
+        knowledgeArticles: []   // Pour stocker tous les articles de savoir
     };
 
     // --- DOM ELEMENTS ---
@@ -160,8 +162,15 @@ if (token) {
         try {
             const response = await fetch(`/api/press-articles?page=${pageNum}`);
             if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
-            const articles = await response.json();
+           const articles = await response.json();
             
+            // On stocke les articles dans notre état global
+            if (pageNum === 1) {
+                state.pressArticles = articles;
+            } else {
+                state.pressArticles = [...state.pressArticles, ...articles];
+            }
+
             const isFirstPage = (pageNum === 1);
             renderPressArticles(articles, !isFirstPage);
 
@@ -187,6 +196,7 @@ if (token) {
             const response = await fetch('/api/knowledge-articles');
             if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
             const articles = await response.json();
+            state.knowledgeArticles = articles; // On stocke les articles
             renderKnowledgeArticles(articles);
         } catch (error) {
             console.error("Impossible de charger les articles de savoir:", error);
@@ -410,12 +420,17 @@ if (token) {
     }
 }
 
-    function renderPressArticles(articles, append = false) {
+   function renderPressArticles(articles, append = false) {
         const container = document.getElementById('press-articles-container');
         if (!container) return;
 
+        // Message amélioré pour les résultats de recherche vides
         if (!append && (!articles || articles.length === 0)) {
-            container.innerHTML = '<p class="text-center text-warm-gray">Aucun article pour le moment.</p>';
+            const searchInput = document.getElementById('press-search-input');
+            const message = searchInput && searchInput.value ? 
+                `Aucun article ne correspond à votre recherche "${searchInput.value}".` :
+                "Aucun article pour le moment.";
+            container.innerHTML = `<p class="text-center text-warm-gray">${message}</p>`;
             return;
         }
         if (append && (!articles || articles.length === 0)) {
@@ -477,11 +492,15 @@ if (token) {
         }
     }
 
-    function renderKnowledgeArticles(articles) {
+   function renderKnowledgeArticles(articles) {
         const container = document.getElementById('knowledge-articles-container');
         if (!container) return;
         if (!articles || articles.length === 0) {
-            container.innerHTML = '<p class="text-center text-warm-gray md:col-span-2">Aucun article pour le moment.</p>';
+            const searchInput = document.getElementById('knowledge-search-input');
+            const message = searchInput && searchInput.value ?
+                `Aucun sujet ne correspond à votre recherche "${searchInput.value}".` :
+                "Aucun article pour le moment.";
+            container.innerHTML = `<p class="text-center text-warm-gray md:col-span-2">${message}</p>`;
             return;
         }
         const blocksToHtml = (blocks) => {
@@ -654,6 +673,50 @@ setupStepNavigation(); // On appelle la nouvelle fonction unique
         });
     }
 
+    // --- NOUVELLE FONCTION POUR LA RECHERCHE ---
+    function initializeSearch() {
+        const pressSearchInput = document.getElementById('press-search-input');
+        const knowledgeSearchInput = document.getElementById('knowledge-search-input');
+        const loadMorePressBtn = document.getElementById('load-more-press');
+
+        if (pressSearchInput) {
+            pressSearchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase().trim();
+                
+                // Masquer/Afficher le bouton "Voir plus" pendant la recherche
+                if(loadMorePressBtn) {
+                    loadMorePressBtn.style.display = searchTerm ? 'none' : 'inline-block';
+                }
+
+                if (!searchTerm) {
+                    renderPressArticles(state.pressArticles); // Affiche tous les articles si la recherche est vide
+                    return;
+                }
+
+                const filteredArticles = state.pressArticles.filter(article => 
+                    article.title.toLowerCase().includes(searchTerm)
+                );
+                renderPressArticles(filteredArticles); // Affiche les articles filtrés
+            });
+        }
+
+        if (knowledgeSearchInput) {
+            knowledgeSearchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase().trim();
+
+                if (!searchTerm) {
+                    renderKnowledgeArticles(state.knowledgeArticles);
+                    return;
+                }
+                
+                const filteredArticles = state.knowledgeArticles.filter(article => 
+                    article.title.toLowerCase().includes(searchTerm)
+                );
+                renderKnowledgeArticles(filteredArticles);
+            });
+        }
+    }
+
     // --- LOGIQUE D'AUTHENTIFICATION (V2) ---
     async function handleRegister(event) {
         event.preventDefault();
@@ -760,10 +823,11 @@ setupStepNavigation(); // On appelle la nouvelle fonction unique
         });
     }
 
-    // --- DÉMARRAGE DE L'APPLICATION ---
+   // --- DÉMARRAGE DE L'APPLICATION ---
 loadConfiguration();
 loadPressArticles();
 loadKnowledgeArticles();
 loadTestimonials();
 loadAndRenderFaqs(); 
+initializeSearch(); // On appelle notre nouvelle fonction ici
 });
