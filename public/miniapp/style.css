@@ -1,0 +1,273 @@
+/* Style de base */
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f0f2f5; /* Fond gris clair */
+    color: #1c1e21;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+main {
+    flex-grow: 1;
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.page { display: none; }
+.page.active { display: block; }
+
+/* Barre de navigation */
+nav {
+    display: flex;
+    justify-content: space-around;
+    padding: 1rem;
+    border-top: 1px solid #ddd;
+    background-color: #fff;
+    flex-shrink: 0;
+}
+
+nav button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    color: #65676b;
+}
+
+nav button.active {
+    color: #0d6efd; /* Bleu vif pour l'onglet actif */
+    font-weight: bold;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Splash screen */
+#splash-screen {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #1c1e21; /* Fond sombre */
+    color: white;
+}
+
+/* --- NOUVEAUX STYLES POUR LE CALCULATEUR --- */
+
+.calculator {
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.tabs {
+    display: flex;
+    border-bottom: 1px solid #e0e0e0;
+    margin-bottom: 20px;
+}
+
+.tab-btn {
+    flex-grow: 1;
+    padding: 12px;
+    border: none;
+    background: none;
+    font-size: 16px;
+    font-weight: 500;
+    color: #65676b;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+}
+
+.tab-btn.active {
+    color: #0d6efd;
+    border-bottom-color: #0d6efd;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+    box-sizing: border-box; /* Important pour que le padding ne casse pas la largeur */
+}
+
+.result {
+    text-align: center;
+    margin: 24px 0;
+    padding: 16px;
+    background-color: #f7f7f7;
+    border-radius: 8px;
+}
+
+.result p {
+    margin: 0;
+    color: #65676b;
+}
+
+.result h3 {
+    margin: 4px 0 0 0;
+    font-size: 24px;
+    color: #1c1e21;
+}
+
+.submit-btn {
+    width: 100%;
+    padding: 14px;
+    background-color: #28a745; /* Vert pour l'action principale */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* --- STYLES POUR L'HISTORIQUE DES TRANSACTIONS --- */
+
+#user-greeting h2 {
+    margin-top: 0;
+}
+
+#transaction-history-container {
+    margin-top: 16px;
+}
+
+.transaction-item {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid #e0e0e0;
+}
+
+.transaction-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.transaction-type {
+    font-size: 16px;
+}
+
+.transaction-date {
+    font-size: 12px;
+    color: #65676b;
+}
+
+.transaction-body {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.transaction-footer {
+    margin-top: 10px;
+    text-align: right;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: white;
+}
+
+.status-completed { background-color: #28a745; } /* Vert */
+.status-pending { background-color: #ffc107; } /* Jaune */
+.status-cancelled { background-color: #dc3545; } /* Rouge */
+
+/* --- STYLES POUR L'ONGLET GAGNER --- */
+
+.referral-card, .stat-card {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid #e0e0e0;
+}
+
+.referral-card h4, .stat-card h4 {
+    margin-top: 0;
+    color: #333;
+}
+
+.referral-card p {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #65676b;
+}
+
+.referral-link-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f0f2f5;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 12px;
+}
+
+#referral-link {
+    font-family: monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#copy-referral-link {
+    background-color: #0d6efd;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-weight: 500;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-left: 10px;
+}
+
+.referral-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.stat-card p {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 8px 0 0 0;
+    color: #0d6efd;
+}
+
+.referral-note {
+    font-size: 12px;
+    color: #65676b;
+    text-align: center;
+    margin-top: 16px;
+}

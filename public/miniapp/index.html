@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATEX Mini App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="splash-screen">
+            <h1>ATEX</h1>
+            <p>Bienvenue</p>
+        </div>
+
+        <main id="main-content" class="hidden">
+            <section id="exchange" class="page active">
+                <div class="calculator">
+                    <div class="tabs">
+                        <button id="buy-tab" class="tab-btn active">Acheter des Cryptos</button>
+                        <button id="sell-tab" class="tab-btn">Vendre des Cryptos</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="amount-to-send">Montant (FCFA)</label>
+                        <input type="number" id="amount-to-send" placeholder="0">
+                        <span>FCFA</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="crypto-select">Crypto-monnaie</label>
+                        <select id="crypto-select">
+                            <option value="usdt">USDT (TRC20)</option>
+                            <option value="btc">BTC (Bitcoin)</option>
+                            <option value="eth">ETH (Ethereum)</option>
+                            <option value="bnb">BNB (BEP20)</option>
+                            <option value="trx">TRX (Tron)</option>
+                            <option value="xrp">XRP (Ripple)</option>
+                            <option value="matic">MATIC (Polygon)</option>
+                            <option value="ton">TON (Toncoin)</option>
+                        </select>
+                    </div>
+
+                    <div id="wallet-address-group" class="form-group hidden">
+                        <label for="wallet-address">Votre Adresse Wallet</label>
+                        <input type="text" id="wallet-address" placeholder="Entrez votre adresse de portefeuille">
+                    </div>
+                    
+                    <div id="mm-provider-group" class="form-group">
+                        <label for="mm-provider">Opérateur Mobile Money</label>
+                        <select id="mm-provider">
+                            <option value="Orange Money">Orange Money</option>
+                            <option value="Moov">Moov</option>
+                            <option value="MTN">MTN</option>
+                            <option value="Wave">Wave</option>
+                            <option value="Yas">Yas</option>
+                        </select>
+                    </div>
+
+                    <div id="phone-number-group" class="form-group">
+                        <label for="phone-number">Votre Numéro de Téléphone</label>
+                        <input type="tel" id="phone-number" placeholder="Ex: 98197062">
+                    </div>
+                    <div class="result">
+                        <p>Vous recevrez ≈</p>
+                        <h3 id="amount-to-receive">0.00 USDT</h3>
+                    </div>
+                    <button id="submit-btn" class="submit-btn">Acheter</button>
+                </div>
+            </section>
+           <section id="earn" class="page">
+                <h2>Invitez et Gagnez</h2>
+                <div class="referral-card">
+                    <h4>Votre lien de parrainage</h4>
+                    <p>Partagez ce lien avec vos amis. Vous gagnez **25 FCFA** en USDT pour chaque ami qui devient actif !</p>
+                    <div class="referral-link-box">
+                        <span id="referral-link">Chargement...</span>
+                        <button id="copy-referral-link">Copier</button>
+                    </div>
+                </div>
+
+                <div class="referral-stats">
+                    <div class="stat-card">
+                        <h4>Gains Totaux</h4>
+                        <p id="total-earnings">0.00 USDT</p>
+                    </div>
+                    <div class="stat-card">
+                        <h4>Amis Invités</h4>
+                        <p id="referral-count">0</p>
+                    </div>
+                </div>
+                 <p class="referral-note">Un ami est considéré "actif" après avoir invité 2 personnes à son tour.</p>
+            </section>
+           <section id="profile" class="page">
+                <div id="user-greeting">
+                    </div>
+                <h3>Mon Historique</h3>
+                <div id="transaction-history-container">
+                    <p>Chargement de l'historique...</p>
+                </div>
+            </section>
+        </main>
+
+        <nav id="nav-bar" class="hidden">
+            <button data-page="exchange" class="active">Échange</button>
+            <button data-page="earn">Gagner</button>
+            <button data-page="profile">Profil</button>
+        </nav>
+    </div>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

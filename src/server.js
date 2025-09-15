@@ -2,6 +2,7 @@
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const TelegramBot = require('node-telegram-bot-api');
+const { nanoid } = require('nanoid'); 
 const express = require('express');
 const admin = require('firebase-admin');
 const cors = require('cors');
@@ -11,6 +12,25 @@ const axios = require('axios');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+
+function escapeMarkdownV2(text) {
+  if (text === null || typeof text === 'undefined') {
+    return '';
+  }
+  const textString = String(text);
+  // Liste complète des caractères à échapper pour MarkdownV2
+  const charsToEscape = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
+  
+  let escapedText = '';
+  for (const char of textString) {
+    if (charsToEscape.includes(char)) {
+      escapedText += '\\' + char;
+    } else {
+      escapedText += char;
+    }
+  }
+  return escapedText;
+}
 
 // --- CONFIGURATION DE FIREBASE ---
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -31,8 +51,126 @@ cloudinary.config({
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 // Telegram
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+// On initialise DEUX bots distincts avec leurs propres tokens
+const adminBot = new TelegramBot(process.env.TELEGRAM_ADMIN_BOT_TOKEN, { polling: true }); // Pour les notifications
+const miniAppBot = new TelegramBot(process.env.TELEGRAM_MINI_APP_BOT_TOKEN, { polling: true }); // Pour la Mini App
 
+console.log('Bot de la Mini App démarré et en écoute...');
+
+// --- LOGIQUE DU BOT TELEGRAM & MINI APP ---
+
+miniAppBot.onText(/\/start(.*)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from.id;
+    // On nettoie le code de parrainage s'il existe
+    const referredByCode = match[1] ? match[1].trim().replace(' ', '') : null;
+
+    try {
+        const usersRef = db.collection('users');
+        const snapshot = await usersRef.where('telegramId', '==', telegramId).limit(1).get();
+
+        if (snapshot.empty) {
+            // Nouvel utilisateur : on le crée
+            const newReferralCode = nanoid(8); // Génère un code unique (ex: 'aB3xZ_1p')
+            
+            const newUser = {
+                telegramId: telegramId,
+                telegramUsername: msg.from.username || '',
+                referralCode: newReferralCode,
+                referredBy: referredByCode || null, // On stocke le code du parrain
+                referralCount: 0,
+                isReferralActive: false,
+                referralEarnings: 0, // Solde en USDT
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+
+            await usersRef.add(newUser);
+            console.log(`Nouvel utilisateur Telegram créé : ${telegramId} avec le code ${newReferralCode}`);
+
+            // --- BLOC AJOUTÉ CI-DESSOUS ---
+            // Si l'utilisateur a été parrainé, on met à jour le compteur de son parrain.
+            if (referredByCode) {
+                const referrerSnapshot = await usersRef.where('referralCode', '==', referredByCode).limit(1).get();
+                if (!referrerSnapshot.empty) {
+                    const referrerDoc = referrerSnapshot.docs[0];
+                    await referrerDoc.ref.update({
+                        referralCount: admin.firestore.FieldValue.increment(1)
+                    });
+                    console.log(`Compteur de parrainage mis à jour pour le code ${referredByCode}`);
+                }
+            }
+
+        } else {
+            // Utilisateur existant
+            console.log(`Utilisateur Telegram existant trouvé : ${telegramId}`);
+        }
+        
+        // On envoie le message avec le bouton pour lancer la Mini App
+        const webAppUrl = process.env.MINI_APP_URL; // Ex: https://atexly.com/miniapp
+        miniAppBot.sendMessage(chatId, "👋 Bienvenue sur ATEX ! Cliquez ci-dessous pour démarrer.", {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: "🚀 Lancer l'application", web_app: { url: webAppUrl } }]
+                ]
+            }
+        });
+
+    } catch (error) {
+        console.error("Erreur dans le handler /start du bot:", error);
+        miniAppBot.sendMessage(chatId, "Oups ! Une erreur est survenue. Veuillez réessayer.");
+    }
+});
+
+// --- GESTION DES CLICS SUR LES BOUTONS D'ADMINISTRATION ---
+adminBot.on('callback_query', async (callbackQuery) => {
+    const msg = callbackQuery.message;
+    const data = callbackQuery.data; // ex: "approve:transactionId123"
+    const adminUser = callbackQuery.from;
+
+    const [action, transactionId] = data.split(':');
+
+    adminBot.answerCallbackQuery(callbackQuery.id);
+
+    try {
+        const transactionRef = db.collection('transactions').doc(transactionId);
+        const doc = await transactionRef.get();
+
+        if (!doc.exists) {
+            return adminBot.sendMessage(msg.chat.id, "Erreur : Transaction introuvable.");
+        }
+
+        let newStatus;
+        let statusEmoji;
+
+        if (action === 'approve') {
+            newStatus = 'completed';
+            statusEmoji = '✅ Approuvée';
+        } else if (action === 'cancel') {
+            newStatus = 'cancelled';
+            statusEmoji = '❌ Annulée';
+        } else {
+            return; 
+        }
+
+        await transactionRef.update({ status: newStatus });
+
+        const originalMessage = msg.text;
+        const updatedMessage = `${escapeMarkdownV2(originalMessage)}\n\n*STATUT : ${statusEmoji} par ${escapeMarkdownV2(adminUser.first_name)}*`;
+        
+        adminBot.editMessageText(updatedMessage, {
+            chat_id: msg.chat.id,
+            message_id: msg.message_id,
+            parse_mode: 'MarkdownV2',
+            reply_markup: {
+                inline_keyboard: [] // On supprime les boutons après l'action
+            }
+        });
+
+    } catch (error) {
+        console.error("Erreur lors du traitement du callback_query:", error);
+        adminBot.sendMessage(msg.chat.id, "Une erreur est survenue lors de la mise à jour de la transaction.");
+    }
+});
 
 // --- FONCTION HELPER POUR CALCULER LE VOLUME MENSUEL DE VENTE ---
 async function calculateUserMonthlyVolume(userId) {
@@ -75,6 +213,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
+app.use('/miniapp', express.static(path.join(__dirname, 'public', 'miniapp'))); // <-- AJOUT
 
 // ================= MIDDLEWARE D'AUTHENTIFICATION (V2) =================
 const verifyToken = (req, res, next) => {
@@ -152,11 +291,13 @@ app.post('/api/auth/register', async (req, res) => {
         }
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
-        const newUserRef = await db.collection('users').add({
+       const newUserRef = await db.collection('users').add({
             username,
             email,
             passwordHash,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            referralCode: nanoid(8),      // <-- AJOUT
+            referralEarnings: 0         // <-- AJOUT
         });
         res.status(201).json({ message: "Compte créé avec succès.", userId: newUserRef.id });
     } catch (error) {
@@ -510,6 +651,234 @@ app.post('/api/user/save-wallets', verifyToken, async (req, res) => {
     }
 });
 
+// ===============================================
+// ROUTE API POUR LA TRANSACTION DE LA MINI APP (V2)
+// ===============================================
+app.post('/api/miniapp/initiate-transaction', async (req, res) => {
+    try {
+        const txData = req.body;
+
+        // Validation simple
+        if (!txData.type || !txData.amountToSend || !txData.phoneNumber) {
+            return res.status(400).json({ message: "Données de transaction manquantes." });
+        }
+        if (txData.type === 'buy' && !txData.walletAddress) {
+            return res.status(400).json({ message: "L'adresse du portefeuille est requise pour un achat." });
+        }
+
+        // 1. Sauvegarder la transaction complète dans Firestore
+        const transactionToSave = {
+            ...txData,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            status: 'pending',
+            source: 'MiniApp'
+        };
+       const newTransactionRef = await db.collection('transactions').add(transactionToSave);
+       const transactionId = newTransactionRef.id;
+        console.log("Nouvelle transaction (complète) depuis la Mini App enregistrée.");
+
+        // 2. Préparer et envoyer une notification enrichie à l'admin
+        let adminMessage;
+        // On échappe toutes les données variables AVANT de construire le message
+        const safeUsername = escapeMarkdownV2(txData.telegramUsername);
+        const safeTelegramId = escapeMarkdownV2(txData.telegramId);
+        const safeAmountToSend = escapeMarkdownV2(txData.amountToSend.toLocaleString('fr-FR'));
+        const safeAmountToReceive = escapeMarkdownV2(txData.amountToReceive.toFixed(6));
+        const safeAmountToReceiveSell = escapeMarkdownV2(Math.round(txData.amountToReceive).toLocaleString('fr-FR'));
+        const safePaymentMethod = escapeMarkdownV2(txData.paymentMethod);
+        const safePhoneNumber = escapeMarkdownV2(txData.phoneNumber);
+        const safeWalletAddress = escapeMarkdownV2(txData.walletAddress);
+        const safeCurrencyTo = escapeMarkdownV2(txData.currencyTo);
+        const safeCurrencyFrom = escapeMarkdownV2(txData.currencyFrom);
+
+       const userInfo = `👤 *Client:* @${safeUsername} \\(ID: ${safeTelegramId}\\)`;
+        const separator = escapeMarkdownV2('--------------------------------------'); // <-- LA CORRECTION EST ICI
+
+        if (txData.type === 'buy') {
+            adminMessage = `
+*nouvelle COMMANDE D'ACHAT \\(Mini App\\)*
+${separator}
+${userInfo}
+*Montant Payé:* ${safeAmountToSend} FCFA
+*Crypto Achetée:* ${safeAmountToReceive} ${safeCurrencyTo}
+*Opérateur MM:* ${safePaymentMethod}
+*N° de Téléphone:* ${safePhoneNumber}
+*Adresse Wallet:* \`${safeWalletAddress}\`
+            `;
+        } else { // type 'sell'
+             adminMessage = `
+*nouvelle COMMANDE DE VENTE \\(Mini App\\)*
+${separator}
+${userInfo}
+*Crypto Vendue:* ${safeAmountToReceive} ${safeCurrencyFrom}
+*Montant à Recevoir:* ${safeAmountToReceiveSell} FCFA
+*Opérateur MM:* ${safePaymentMethod}
+*N° de Réception:* ${safePhoneNumber}
+            `;
+        }
+        
+       // On crée le clavier avec les boutons et on y insère l'ID de la transaction
+const options = {
+    parse_mode: 'MarkdownV2',
+    reply_markup: {
+        inline_keyboard: [
+            [
+                { text: "✅ Approuver", callback_data: `approve:${transactionId}` },
+                { text: "❌ Annuler", callback_data: `cancel:${transactionId}` }
+            ]
+        ]
+    }
+};
+
+await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, adminMessage, options);
+// ...
+        console.log("Notification de transaction enrichie envoyée à l'admin.");
+
+        // 3. Envoyer la bonne réponse au frontend selon le type de transaction
+        if (txData.type === 'buy') {
+            res.status(200).json({ message: "Votre commande d'achat a été transmise avec succès !" });
+        } else { // type 'sell'
+            const adminUsername = process.env.TELEGRAM_ADMIN_USERNAME;
+            const userMessage = `Bonjour ATEX, je souhaite initier une VENTE :\n- Je vends : ${txData.amountToSend} ${txData.currencyFrom}\n- Pour recevoir : ${Math.round(txData.amountToReceive)} FCFA\n- Mon numéro : ${txData.phoneNumber} (${txData.paymentMethod})`;
+            const encodedMessage = encodeURIComponent(userMessage);
+            const redirectUrl = `https://t.me/${adminUsername}?text=${encodedMessage}`;
+            
+            res.status(200).json({ redirectUrl: redirectUrl });
+        }
+
+    } catch (error) {
+        console.error("Erreur lors de l'initialisation de la transaction Mini App V2:", error);
+        res.status(500).json({ message: "Erreur interne du serveur." });
+    }
+});
+
+// ===============================================
+// ROUTE API POUR L'HISTORIQUE DE LA MINI APP
+// ===============================================
+app.get('/api/miniapp/my-transactions/:telegramId', async (req, res) => {
+    try {
+        const telegramId = parseInt(req.params.telegramId, 10);
+
+        if (isNaN(telegramId)) {
+            return res.status(400).json({ message: "ID Telegram invalide." });
+        }
+
+        const transactionsRef = db.collection('transactions')
+            .where('telegramId', '==', telegramId)
+            .orderBy('createdAt', 'desc');
+            
+        const snapshot = await transactionsRef.get();
+
+        if (snapshot.empty) {
+            return res.status(200).json([]);
+        }
+
+        const transactions = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                // Convertit le timestamp Firebase en une date lisible (ISO string)
+                createdAt: data.createdAt.toDate().toISOString()
+            };
+        });
+
+        res.status(200).json(transactions);
+
+    } catch (error) {
+        console.error("Erreur lors de la récupération de l'historique des transactions:", error);
+        res.status(500).json({ message: "Erreur interne du serveur." });
+    }
+});
+
+// ===============================================
+// ROUTE API POUR LES INFOS DE PARRAINAGE
+// ===============================================
+app.get('/api/miniapp/referral-info/:telegramId', async (req, res) => {
+    try {
+        const telegramId = parseInt(req.params.telegramId, 10);
+        if (isNaN(telegramId)) {
+            return res.status(400).json({ message: "ID Telegram invalide." });
+        }
+
+        const usersRef = db.collection('users');
+        const userSnapshot = await usersRef.where('telegramId', '==', telegramId).limit(1).get();
+
+        if (userSnapshot.empty) {
+            return res.status(404).json({ message: "Utilisateur introuvable." });
+        }
+
+        const userData = userSnapshot.docs[0].data();
+        
+        // On prépare les données à renvoyer
+        const referralInfo = {
+            referralCode: userData.referralCode,
+            referralEarnings: userData.referralEarnings || 0,
+            referralCount: userData.referralCount || 0,
+        };
+
+        res.status(200).json(referralInfo);
+
+    } catch (error) {
+        console.error("Erreur lors de la récupération des infos de parrainage:", error);
+        res.status(500).json({ message: "Erreur interne du serveur." });
+    }
+});
+
+// ===============================================
+// ROUTE DE CHECK-IN UTILISATEUR (POUR PARRAINAGE)
+// ===============================================
+app.post('/api/miniapp/user-check-in', async (req, res) => {
+    try {
+        const { user, referredByCode } = req.body;
+
+        if (!user || !user.id) {
+            return res.status(400).json({ message: "Données utilisateur invalides." });
+        }
+
+        const usersRef = db.collection('users');
+        const userSnapshot = await usersRef.where('telegramId', '==', user.id).limit(1).get();
+
+        // Si l'utilisateur n'existe pas, on le crée
+        if (userSnapshot.empty) {
+            console.log(`Check-in: Nouvel utilisateur ${user.id}. Création en cours...`);
+            const newReferralCode = nanoid(8);
+            const newUser = {
+                telegramId: user.id,
+                telegramUsername: user.username || '',
+                referralCode: newReferralCode,
+                referredBy: referredByCode || null,
+                referralCount: 0,
+                isReferralActive: false,
+                referralEarnings: 0,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+            await usersRef.add(newUser);
+            console.log(`Nouvel utilisateur ${user.id} créé avec le code ${newReferralCode}.`);
+
+            // Et si il a été parrainé, on met à jour le parrain
+            if (referredByCode) {
+                const referrerSnapshot = await usersRef.where('referralCode', '==', referredByCode).limit(1).get();
+                if (!referrerSnapshot.empty) {
+                    const referrerDoc = referrerSnapshot.docs[0];
+                    await referrerDoc.ref.update({
+                        referralCount: admin.firestore.FieldValue.increment(1)
+                    });
+                    console.log(`Compteur de parrainage mis à jour pour le parrain avec le code ${referredByCode}.`);
+                }
+            }
+        } else {
+             console.log(`Check-in: Utilisateur existant ${user.id}.`);
+        }
+        
+        res.status(200).json({ message: "Check-in réussi." });
+
+    } catch (error) {
+        console.error("Erreur lors du user-check-in:", error);
+        res.status(500).json({ message: "Erreur interne du serveur." });
+    }
+});
+
 // ================= ROUTES KYC UTILISATEUR =================
 
 // Récupérer le statut KYC de l'utilisateur
@@ -584,7 +953,7 @@ app.post('/api/user/kyc-request', verifyToken, upload.fields([
 - [Verso CNI](${docVersoUrl})
 - [Selfie](${selfieUrl})
         `;
-        await bot.sendMessage(process.env.TELEGRAM_CHAT_ID, message, { parse_mode: 'Markdown' });
+        await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, message, { parse_mode: 'Markdown' });
 
         // 3. Mettre à jour le statut de l'utilisateur
         await userRef.update({ kyc_status: 'submitted' });
