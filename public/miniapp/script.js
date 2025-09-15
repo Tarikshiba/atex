@@ -41,8 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const phoneNumberInput = document.getElementById('phone-number');
     const userGreetingDiv = document.getElementById('user-greeting');
     const historyContainer = document.getElementById('transaction-history-container');
-    
-    // NOUVEAUX ÉLÉMENTS DU DOM POUR LE PARRAINAGE
     const referralLinkSpan = document.getElementById('referral-link');
     const copyReferralLinkBtn = document.getElementById('copy-referral-link');
     const totalEarningsP = document.getElementById('total-earnings');
@@ -63,32 +61,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     }
 
-    // --- FONCTION D'AFFICHAGE DE L'HISTORIQUE ---
+    // --- FONCTIONS D'AFFICHAGE ---
     async function displayTransactionHistory() {
         const user = tg.initDataUnsafe?.user;
         if (!user) {
             historyContainer.innerHTML = '<p>Impossible d\'identifier l\'utilisateur.</p>';
             return;
         }
-
         historyContainer.innerHTML = '<p>Chargement de l\'historique...</p>';
         try {
             const response = await fetch(`/api/miniapp/my-transactions/${user.id}`);
             if (!response.ok) throw new Error('Erreur lors de la récupération des données.');
-
             const transactions = await response.json();
-
             if (transactions.length === 0) {
                 historyContainer.innerHTML = '<p>Aucune transaction pour le moment.</p>';
                 return;
             }
-
             let historyHtml = '';
             transactions.forEach(tx => {
                 const typeText = tx.type === 'buy' ? 'Achat' : 'Vente';
                 const fromText = `${tx.amountToSend.toLocaleString('fr-FR')} ${tx.currencyFrom}`;
                 const toText = `${tx.amountToReceive.toLocaleString('fr-FR')} ${tx.currencyTo}`;
-
                 historyHtml += `
                     <div class="transaction-item">
                         <div class="transaction-header">
@@ -111,25 +104,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- NOUVELLE FONCTION D'AFFICHAGE DU PARRAINAGE ---
     async function displayReferralInfo() {
         const user = tg.initDataUnsafe?.user;
         if (!user) return;
-
         try {
             const response = await fetch(`/api/miniapp/referral-info/${user.id}`);
             if (!response.ok) throw new Error('Erreur réseau.');
-            
             const info = await response.json();
-            
-           const botUsername = "AtexOfficielBot";
-            const shortAppName = "atex"; // Le nom court que vous avez configuré
+            const botUsername = "AtexOfficielBot";
+            const shortAppName = "atex";
             const referralLink = `https://t.me/${botUsername}/${shortAppName}?startapp=${info.referralCode}`;
-            
             referralLinkSpan.textContent = referralLink;
             totalEarningsP.textContent = `${(info.referralEarnings || 0).toFixed(2)} USDT`;
             referralCountP.textContent = info.referralCount || 0;
-
         } catch (error) {
             console.error("Erreur fetch parrainage:", error);
             referralLinkSpan.textContent = "Erreur de chargement.";
@@ -146,8 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const rate = atexPrices[selectedCrypto][currentMode];
-        let result;
-        let resultCurrency;
+        let result, resultCurrency;
         if (currentMode === 'buy') {
             result = amount / rate;
             resultCurrency = selectedCrypto.toUpperCase();
@@ -165,7 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error('Network response was not ok');
             const data = await response.json();
             atexPrices = data.atexPrices;
-            console.log("Prix chargés :", atexPrices);
             calculate();
         } catch (error) {
             console.error("Erreur lors de la récupération des prix:", error);
@@ -177,7 +162,6 @@ document.addEventListener('DOMContentLoaded', () => {
         buyTab.classList.toggle('active', newMode === 'buy');
         sellTab.classList.toggle('active', newMode === 'sell');
         walletAddressGroup.classList.toggle('hidden', newMode !== 'buy');
-
         if (newMode === 'buy') {
             amountLabel.textContent = 'Montant (FCFA)';
             amountCurrencySpan.textContent = 'FCFA';
@@ -268,13 +252,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-   // --- NOUVELLE FONCTION D'INITIALISATION ---
+    // --- NOUVELLE FONCTION D'INITIALISATION ---
     async function initializeApp() {
         // Étape 1 : On s'assure que l'utilisateur est enregistré et que le parrainage est traité
         await performUserCheckIn();
         
         // Étape 2 : On charge les informations essentielles (prix, etc.)
-        fetchPrices(); // Pas besoin d'attendre la fin pour afficher l'interface
+        fetchPrices();
         
         // Étape 3 : On affiche le contenu
         const user = tg.initDataUnsafe?.user;
@@ -289,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
         switchMode('buy');
     }
 
-    // --- MISE À JOUR DE LA NAVIGATION ET DES ÉCOUTEURS ---
+    // --- ATTACHEMENT DES ÉCOUTEURS DE NAVIGATION ---
     const navButtons = document.querySelectorAll('nav button');
     const pages = document.querySelectorAll('.page');
     navButtons.forEach(button => {
@@ -310,7 +294,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-   // On appelle la fonction principale pour démarrer l'application
-initializeApp();
-
+    // On appelle la fonction principale pour démarrer l'application
+    initializeApp();
 });
