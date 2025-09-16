@@ -379,11 +379,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 displayReferralInfo();
             }
 
+            // --- CES LIGNES ONT ÉTÉ DÉPLACÉES ICI ---
             navButtons.forEach(btn => btn.classList.remove('active'));
             button.classList.add('active');
             pages.forEach(page => {
-                page.classList.toggle('active', page.id === targetPageId)
+                page.classList.toggle('active', page.id === targetPageId);
             });
+            // --- FIN DU DÉPLACEMENT ---
         });
     });
 
