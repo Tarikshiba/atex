@@ -124,8 +124,19 @@ miniAppBot.onText(/\/start(.*)/, async (msg, match) => {
 // --- GESTION DES CLICS SUR LES BOUTONS D'ADMINISTRATION ---
 adminBot.on('callback_query', async (callbackQuery) => {
     const msg = callbackQuery.message;
-    const data = callbackQuery.data; // ex: "approve:transactionId123"
+    const data = callbackQuery.data;
     const adminUser = callbackQuery.from;
+
+    // --- BLOC DE SÉCURITÉ AJOUTÉ CI-DESSOUS ---
+    const authorizedAdmins = (process.env.TELEGRAM_ADMIN_IDS || '').split(',');
+    if (!authorizedAdmins.includes(adminUser.id.toString())) {
+        // Si l'utilisateur n'est pas un admin autorisé, on l'informe et on arrête tout.
+        return adminBot.answerCallbackQuery(callbackQuery.id, {
+            text: "Action non autorisée. Vous n'êtes pas un administrateur.",
+            show_alert: true
+        });
+    }
+    // --- FIN DU BLOC DE SÉCURITÉ ---
 
     const [action, transactionId] = data.split(':');
 
