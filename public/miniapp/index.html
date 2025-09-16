@@ -38,12 +38,10 @@
                             <option value="ton">TON (Toncoin)</option>
                         </select>
                     </div>
-
-                    <div id="wallet-address-group" class="form-group hidden">
+                    <div id="wallet-address-group" class="form-group">
                         <label for="wallet-address">Votre Adresse Wallet</label>
                         <input type="text" id="wallet-address" placeholder="Entrez votre adresse de portefeuille">
                     </div>
-                    
                     <div id="mm-provider-group" class="form-group">
                         <label for="mm-provider">Opérateur Mobile Money</label>
                         <select id="mm-provider">
@@ -54,10 +52,9 @@
                             <option value="Yas">Yas</option>
                         </select>
                     </div>
-
                     <div id="phone-number-group" class="form-group">
                         <label for="phone-number">Votre Numéro de Téléphone</label>
-                        <input type="tel" id="phone-number" placeholder="Ex: 98197062">
+                        <input type="tel" id="phone-number" placeholder="Ex: +221...">
                     </div>
                     <div class="result">
                         <p>Vous recevrez ≈</p>
@@ -66,7 +63,8 @@
                     <button id="submit-btn" class="submit-btn">Acheter</button>
                 </div>
             </section>
-           <section id="earn" class="page">
+
+            <section id="earn" class="page">
                 <h2>Invitez et Gagnez</h2>
                 <div class="referral-card">
                     <h4>Votre lien de parrainage</h4>
@@ -76,14 +74,29 @@
                         <button id="copy-referral-link">Copier</button>
                     </div>
                 </div>
-
                 <div class="referral-stats">
+                    <div class="stat-card">
+                        <h4>Gains Totaux</h4>
+                        <p id="total-earnings">0.00 USDT</p>
                     </div>
+                    <div class="stat-card">
+                        <h4>Amis Invités</h4>
+                        <p id="referral-count">0</p>
+                    </div>
+                </div>
                 <p class="referral-note">Un ami est considéré "actif" après avoir invité 2 personnes à son tour.</p>
-                
                 <button id="show-withdrawal-btn" class="submit-btn">Demander un retrait</button>
             </section>
-</main>
+
+            <section id="profile" class="page">
+                <div id="user-greeting">
+                    </div>
+                <h3>Mon Historique</h3>
+                <div id="transaction-history-container">
+                    <p>Chargement de l'historique...</p>
+                </div>
+            </section>
+        </main>
 
         <div id="withdrawal-modal" class="modal-overlay hidden">
             <div class="modal-content">
@@ -121,17 +134,6 @@
                 <button id="submit-withdrawal-btn" class="submit-btn">Confirmer le retrait</button>
             </div>
         </div>
-
-        <nav id="nav-bar" class="hidden">
-           <section id="profile" class="page">
-                <div id="user-greeting">
-                    </div>
-                <h3>Mon Historique</h3>
-                <div id="transaction-history-container">
-                    <p>Chargement de l'historique...</p>
-                </div>
-            </section>
-        </main>
 
         <nav id="nav-bar" class="hidden">
             <button data-page="exchange" class="active">Échange</button>
