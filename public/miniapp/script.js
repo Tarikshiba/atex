@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     buyTab.addEventListener('click', () => switchMode('buy'));
     sellTab.addEventListener('click', () => switchMode('sell'));
-    submitBtn.addEventListener('click', async () => {
+     submitBtn.addEventListener('click', async () => {
         const user = tg.initDataUnsafe?.user;
         const amountToSend = parseFloat(amountToSendInput.value);
         const selectedCrypto = cryptoSelect.value;
@@ -199,7 +199,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!amountToSend || amountToSend <= 0) return tg.showAlert("Veuillez entrer un montant valide.");
         if (currentMode === 'buy' && !walletAddress) return tg.showAlert("Veuillez entrer votre adresse de portefeuille.");
+        
+        // --- BLOC DE VALIDATION DU TÉLÉPHONE AMÉLIORÉ ---
         if (!phoneNumber) return tg.showAlert("Veuillez entrer votre numéro de téléphone.");
+        
+        // On vérifie que le numéro commence bien par un "+"
+        if (!phoneNumber.startsWith('+')) {
+            return tg.showAlert("Format invalide. Veuillez inclure l'indicatif de votre pays (ex: +221...).");
+        }
+        // --- FIN DU BLOC DE VALIDATION ---
 
         const transactionData = {
             type: currentMode,
@@ -251,6 +259,91 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
         }
     });
+
+// --- NOUVEAUX ÉLÉMENTS DU DOM POUR LE RETRAIT (AJOUTEZ CECI) ---
+    const showWithdrawalBtn = document.getElementById('show-withdrawal-btn');
+    const withdrawalModal = document.getElementById('withdrawal-modal');
+    const closeWithdrawalModalBtn = document.getElementById('close-withdrawal-modal');
+    const withdrawalMethodRadios = document.querySelectorAll('input[name="withdrawal-method"]');
+    const usdtGroup = document.getElementById('withdrawal-usdt-group');
+    const mmGroup = document.getElementById('withdrawal-mm-group');
+    const submitWithdrawalBtn = document.getElementById('submit-withdrawal-btn');
+
+    // --- NOUVELLE SECTION : LOGIQUE DE RETRAIT DES GAINS (AJOUTEZ CECI) ---
+    if (showWithdrawalBtn) {
+        showWithdrawalBtn.addEventListener('click', () => {
+            withdrawalModal.classList.remove('hidden');
+        });
+
+        closeWithdrawalModalBtn.addEventListener('click', () => {
+            withdrawalModal.classList.add('hidden');
+        });
+
+        withdrawalMethodRadios.forEach(radio => {
+            radio.addEventListener('change', (event) => {
+                const isUsdt = event.target.value === 'usdt';
+                usdtGroup.classList.toggle('hidden', !isUsdt);
+                mmGroup.classList.toggle('hidden', isUsdt);
+            });
+        });
+
+        submitWithdrawalBtn.addEventListener('click', async () => {
+            const user = tg.initDataUnsafe?.user;
+            if (!user) return tg.showAlert('Utilisateur non identifié.');
+
+            const amountInput = document.getElementById('withdrawal-amount');
+            const amount = parseFloat(amountInput.value);
+            const method = document.querySelector('input[name="withdrawal-method"]:checked').value;
+            const totalEarnings = parseFloat(totalEarningsP.textContent);
+
+            // Validations
+            if (isNaN(amount) || amount <= 0) return tg.showAlert('Veuillez entrer un montant valide.');
+            if (amount < 5) return tg.showAlert('Le montant minimum de retrait est de 5 USDT.');
+            if (amount > totalEarnings) return tg.showAlert('Vous ne pouvez pas retirer plus que vos gains totaux.');
+
+            let details = {};
+            if (method === 'usdt') {
+                const wallet = document.getElementById('withdrawal-wallet').value;
+                if (!wallet) return tg.showAlert('Veuillez entrer votre adresse de portefeuille USDT.');
+                details = { walletAddress: wallet };
+            } else { // method === 'mm'
+                const provider = document.getElementById('withdrawal-mm-provider').value;
+                const phone = document.getElementById('withdrawal-phone').value;
+                if (!phone) return tg.showAlert('Veuillez entrer votre numéro de téléphone.');
+                if (!phone.startsWith('+')) return tg.showAlert("Format invalide. Le numéro doit commencer par l'indicatif du pays (ex: +221...).");
+                details = { provider, phone };
+            }
+
+            const withdrawalData = {
+                telegramId: user.id,
+                telegramUsername: user.username || 'non-défini',
+                amount,
+                method,
+                details
+            };
+
+            try {
+                tg.MainButton.showProgress();
+                const response = await fetch('/api/miniapp/request-withdrawal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(withdrawalData)
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'Une erreur est survenue.');
+
+                tg.showAlert(data.message, () => {
+                    withdrawalModal.classList.add('hidden');
+                    amountInput.value = ''; // Vider le champ du montant
+                    displayReferralInfo(); // Mettre à jour l'affichage des gains
+                });
+            } catch (error) {
+                tg.showAlert(`Erreur: ${error.message}`);
+            } finally {
+                tg.MainButton.hideProgress();
+            }
+        });
+    }
 
     // --- NOUVELLE FONCTION D'INITIALISATION ---
     async function initializeApp() {

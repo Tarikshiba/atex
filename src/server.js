@@ -130,59 +130,85 @@ adminBot.on('callback_query', async (callbackQuery) => {
     const data = callbackQuery.data;
     const adminUser = callbackQuery.from;
 
-    // --- BLOC DE SÉCURITÉ AJOUTÉ CI-DESSOUS ---
     const authorizedAdmins = (process.env.TELEGRAM_ADMIN_IDS || '').split(',');
     if (!authorizedAdmins.includes(adminUser.id.toString())) {
-        // Si l'utilisateur n'est pas un admin autorisé, on l'informe et on arrête tout.
         return adminBot.answerCallbackQuery(callbackQuery.id, {
             text: "Action non autorisée. Vous n'êtes pas un administrateur.",
             show_alert: true
         });
     }
-    // --- FIN DU BLOC DE SÉCURITÉ ---
 
-    const [action, transactionId] = data.split(':');
-
+    const [action, id] = data.split(':');
     adminBot.answerCallbackQuery(callbackQuery.id);
 
-    try {
-        const transactionRef = db.collection('transactions').doc(transactionId);
-        const doc = await transactionRef.get();
+    // --- LOGIQUE POUR LES TRANSACTIONS CLASSIQUES ---
+    if (action === 'approve' || action === 'cancel') {
+        try {
+            const transactionRef = db.collection('transactions').doc(id);
+            const doc = await transactionRef.get();
+            if (!doc.exists) return adminBot.sendMessage(msg.chat.id, "Erreur : Transaction introuvable.");
 
-        if (!doc.exists) {
-            return adminBot.sendMessage(msg.chat.id, "Erreur : Transaction introuvable.");
+            const status = action === 'approve' ? 'completed' : 'cancelled';
+            const emoji = action === 'approve' ? '✅ Approuvée' : '❌ Annulée';
+
+            await transactionRef.update({ status });
+
+            const originalMessage = msg.text;
+            const updatedMessage = `${escapeMarkdownV2(originalMessage)}\n\n*STATUT : ${emoji} par ${escapeMarkdownV2(adminUser.first_name)}*`;
+            
+            adminBot.editMessageText(updatedMessage, {
+                chat_id: msg.chat.id, message_id: msg.message_id,
+                parse_mode: 'MarkdownV2', reply_markup: { inline_keyboard: [] }
+            });
+        } catch (error) {
+            console.error("Erreur (callback transaction):", error);
+            adminBot.sendMessage(msg.chat.id, "Une erreur est survenue (transaction).");
         }
+    }
+    
+    // --- NOUVELLE LOGIQUE POUR LES RETRAITS DE GAINS ---
+    if (action === 'approve_withdrawal' || action === 'reject_withdrawal') {
+        try {
+            const withdrawalRef = db.collection('withdrawals').doc(id);
+            const doc = await withdrawalRef.get();
+            if (!doc.exists) return adminBot.sendMessage(msg.chat.id, "Erreur : Demande de retrait introuvable.");
 
-        let newStatus;
-        let statusEmoji;
+            const withdrawalData = doc.data();
+            let newStatus, statusEmoji, userMessage;
 
-        if (action === 'approve') {
-            newStatus = 'completed';
-            statusEmoji = '✅ Approuvée';
-        } else if (action === 'cancel') {
-            newStatus = 'cancelled';
-            statusEmoji = '❌ Annulée';
-        } else {
-            return; 
-        }
-
-        await transactionRef.update({ status: newStatus });
-
-        const originalMessage = msg.text;
-        const updatedMessage = `${escapeMarkdownV2(originalMessage)}\n\n*STATUT : ${statusEmoji} par ${escapeMarkdownV2(adminUser.first_name)}*`;
-        
-        adminBot.editMessageText(updatedMessage, {
-            chat_id: msg.chat.id,
-            message_id: msg.message_id,
-            parse_mode: 'MarkdownV2',
-            reply_markup: {
-                inline_keyboard: [] // On supprime les boutons après l'action
+            if (action === 'approve_withdrawal') {
+                newStatus = 'completed';
+                statusEmoji = '✅ Approuvée';
+                userMessage = `🎉 Bonne nouvelle ! Votre demande de retrait de ${withdrawalData.amount.toFixed(2)} USDT a été approuvée et traitée.`;
+                await withdrawalRef.update({ status: newStatus });
+            } else { // reject_withdrawal
+                newStatus = 'cancelled';
+                statusEmoji = '❌ Rejetée';
+                userMessage = `⚠️ Votre demande de retrait de ${withdrawalData.amount.toFixed(2)} USDT a été rejetée. Les fonds ont été recrédités sur votre solde de gains.`;
+                
+                const userSnapshot = await db.collection('users').where('telegramId', '==', withdrawalData.telegramId).limit(1).get();
+                if (!userSnapshot.empty) {
+                    const userDoc = userSnapshot.docs[0];
+                    await userDoc.ref.update({
+                        referralEarnings: admin.firestore.FieldValue.increment(withdrawalData.amount)
+                    });
+                }
+                await withdrawalRef.update({ status: newStatus });
             }
-        });
 
-    } catch (error) {
-        console.error("Erreur lors du traitement du callback_query:", error);
-        adminBot.sendMessage(msg.chat.id, "Une erreur est survenue lors de la mise à jour de la transaction.");
+            const originalMessage = msg.text;
+            const updatedMessage = `${escapeMarkdownV2(originalMessage)}\n\n*STATUT : ${statusEmoji} par ${escapeMarkdownV2(adminUser.first_name)}*`;
+            adminBot.editMessageText(updatedMessage, {
+                chat_id: msg.chat.id, message_id: msg.message_id,
+                parse_mode: 'MarkdownV2', reply_markup: { inline_keyboard: [] }
+            });
+
+            await miniAppBot.sendMessage(withdrawalData.telegramId, userMessage);
+
+        } catch (error) {
+            console.error("Erreur (callback withdrawal):", error);
+            adminBot.sendMessage(msg.chat.id, "Une erreur est survenue (retrait).");
+        }
     }
 });
 
@@ -935,6 +961,92 @@ app.post('/api/miniapp/user-check-in', async (req, res) => {
         if (!res.headersSent) {
             res.status(500).json({ message: "Erreur interne du serveur." });
         }
+    }
+});
+
+// ===============================================
+// ROUTE POUR LES DEMANDES DE RETRAIT DE GAINS
+// ===============================================
+app.post('/api/miniapp/request-withdrawal', async (req, res) => {
+    try {
+        const { telegramId, telegramUsername, amount, method, details } = req.body;
+
+        if (!telegramId || !amount || !method || !details) {
+            return res.status(400).json({ message: "Données de demande de retrait manquantes." });
+        }
+
+        const usersRef = db.collection('users');
+        const userSnapshot = await usersRef.where('telegramId', '==', telegramId).limit(1).get();
+
+        if (userSnapshot.empty) {
+            return res.status(404).json({ message: "Utilisateur introuvable." });
+        }
+
+        const userDoc = userSnapshot.docs[0];
+        const userData = userDoc.data();
+        const currentEarnings = userData.referralEarnings || 0;
+
+        // --- VÉRIFICATION DE SÉCURITÉ CÔTÉ SERVEUR ---
+        if (amount < 5) {
+            return res.status(400).json({ message: "Le montant minimum de retrait est de 5 USDT." });
+        }
+        if (currentEarnings < amount) {
+            return res.status(400).json({ message: "Fonds insuffisants. Vos gains ont peut-être changé." });
+        }
+
+        // 1. Débiter le compte de l'utilisateur
+        await userDoc.ref.update({
+            referralEarnings: admin.firestore.FieldValue.increment(-amount)
+        });
+
+        // 2. Enregistrer la demande de retrait
+        const withdrawalRef = await db.collection('withdrawals').add({
+            telegramId,
+            telegramUsername,
+            amount,
+            method,
+            details,
+            status: 'pending',
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        const withdrawalId = withdrawalRef.id;
+
+        // 3. Envoyer la notification à l'admin
+        const safeUsername = escapeMarkdownV2(telegramUsername);
+        const safeAmount = escapeMarkdownV2(amount.toFixed(2));
+        let detailsText = '';
+        if (method === 'usdt') {
+            detailsText = `*Wallet:* \`${escapeMarkdownV2(details.walletAddress)}\``;
+        } else {
+            detailsText = `*Opérateur:* ${escapeMarkdownV2(details.provider)}\n*Numéro:* \`${escapeMarkdownV2(details.phone)}\``;
+        }
+
+        const adminMessage = `
+*nouvelle DEMANDE DE RETRAIT*
+${escapeMarkdownV2('--------------------------------------')}
+*Client:* @${safeUsername}
+*Montant:* ${safeAmount} USDT
+*Méthode:* ${escapeMarkdownV2(method.toUpperCase())}
+${detailsText}
+        `;
+
+        await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, adminMessage, {
+            parse_mode: 'MarkdownV2',
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: "✅ Approuver", callback_data: `approve_withdrawal:${withdrawalId}` },
+                        { text: "❌ Rejeter", callback_data: `reject_withdrawal:${withdrawalId}` }
+                    ]
+                ]
+            }
+        });
+
+        res.status(200).json({ message: "Votre demande de retrait a été soumise. Elle sera traitée prochainement." });
+
+    } catch (error) {
+        console.error("Erreur lors de la demande de retrait:", error);
+        res.status(500).json({ message: "Erreur interne du serveur." });
     }
 });
 

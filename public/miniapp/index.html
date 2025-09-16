@@ -78,17 +78,51 @@
                 </div>
 
                 <div class="referral-stats">
-                    <div class="stat-card">
-                        <h4>Gains Totaux</h4>
-                        <p id="total-earnings">0.00 USDT</p>
                     </div>
-                    <div class="stat-card">
-                        <h4>Amis Invités</h4>
-                        <p id="referral-count">0</p>
+                <p class="referral-note">Un ami est considéré "actif" après avoir invité 2 personnes à son tour.</p>
+                
+                <button id="show-withdrawal-btn" class="submit-btn">Demander un retrait</button>
+            </section>
+</main>
+
+        <div id="withdrawal-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <button id="close-withdrawal-modal" class="modal-close-btn">&times;</button>
+                <h3>Demande de Retrait</h3>
+                <div class="form-group">
+                    <label>Méthode de retrait</label>
+                    <div class="radio-group">
+                        <input type="radio" id="method-usdt" name="withdrawal-method" value="usdt" checked>
+                        <label for="method-usdt">USDT (TRC20)</label>
+                        <input type="radio" id="method-mm" name="withdrawal-method" value="mm">
+                        <label for="method-mm">Mobile Money</label>
                     </div>
                 </div>
-                 <p class="referral-note">Un ami est considéré "actif" après avoir invité 2 personnes à son tour.</p>
-            </section>
+                <div class="form-group">
+                    <label for="withdrawal-amount">Montant à retirer (min: 5 USDT)</label>
+                    <input type="number" id="withdrawal-amount" placeholder="0.00">
+                </div>
+                <div id="withdrawal-usdt-group" class="form-group">
+                    <label for="withdrawal-wallet">Adresse Wallet USDT (TRC20)</label>
+                    <input type="text" id="withdrawal-wallet" placeholder="Votre adresse TRC20">
+                </div>
+                <div id="withdrawal-mm-group" class="form-group hidden">
+                    <label for="withdrawal-mm-provider">Opérateur</label>
+                    <select id="withdrawal-mm-provider">
+                         <option value="Orange Money">Orange Money</option>
+                         <option value="Moov">Moov</option>
+                         <option value="MTN">MTN</option>
+                         <option value="Wave">Wave</option>
+                         <option value="Yas">Yas</option>
+                    </select>
+                    <label for="withdrawal-phone">Numéro de téléphone</label>
+                    <input type="tel" id="withdrawal-phone" placeholder="+221...">
+                </div>
+                <button id="submit-withdrawal-btn" class="submit-btn">Confirmer le retrait</button>
+            </div>
+        </div>
+
+        <nav id="nav-bar" class="hidden">
            <section id="profile" class="page">
                 <div id="user-greeting">
                     </div>
