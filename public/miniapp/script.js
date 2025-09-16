@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error('Erreur réseau.');
             const info = await response.json();
             const botUsername = "AtexOfficielBot";
-            const shortAppName = "atex";
+            const shortAppName = "atexly";
             const referralLink = `https://t.me/${botUsername}/${shortAppName}?startapp=${info.referralCode}`;
             referralLinkSpan.textContent = referralLink;
             totalEarningsP.textContent = `${(info.referralEarnings || 0).toFixed(2)} USDT`;

@@ -12,6 +12,9 @@ const axios = require('axios');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+// --- CONFIGURATION DE LA COMMISSION DE PARRAINAGE ---
+// TODO: Ajuster le taux de change FCFA -> USDT si nécessaire
+const REFERRAL_COMMISSION_USDT = 25 / 615; // 25 FCFA convertis en USDT (taux ~615)
 
 function escapeMarkdownV2(text) {
   if (text === null || typeof text === 'undefined') {
@@ -836,6 +839,7 @@ app.get('/api/miniapp/referral-info/:telegramId', async (req, res) => {
     }
 });
 
+
 // ===============================================
 // ROUTE DE CHECK-IN UTILISATEUR (POUR PARRAINAGE)
 // ===============================================
@@ -850,6 +854,8 @@ app.post('/api/miniapp/user-check-in', async (req, res) => {
         const usersRef = db.collection('users');
         const userSnapshot = await usersRef.where('telegramId', '==', user.id).limit(1).get();
 
+        let wasReferred = false; 
+
         // Si l'utilisateur n'existe pas, on le crée
         if (userSnapshot.empty) {
             console.log(`Check-in: Nouvel utilisateur ${user.id}. Création en cours...`);
@@ -857,6 +863,7 @@ app.post('/api/miniapp/user-check-in', async (req, res) => {
             const newUser = {
                 telegramId: user.id,
                 telegramUsername: user.username || '',
+                firstName: user.first_name || '',
                 referralCode: newReferralCode,
                 referredBy: referredByCode || null,
                 referralCount: 0,
@@ -867,15 +874,43 @@ app.post('/api/miniapp/user-check-in', async (req, res) => {
             await usersRef.add(newUser);
             console.log(`Nouvel utilisateur ${user.id} créé avec le code ${newReferralCode}.`);
 
-            // Et si il a été parrainé, on met à jour le parrain
             if (referredByCode) {
+                wasReferred = true;
                 const referrerSnapshot = await usersRef.where('referralCode', '==', referredByCode).limit(1).get();
+
                 if (!referrerSnapshot.empty) {
+                    // --- MODIFICATION MAJEURE POUR LA LOGIQUE DE COMMISSION ---
                     const referrerDoc = referrerSnapshot.docs[0];
-                    await referrerDoc.ref.update({
-                        referralCount: admin.firestore.FieldValue.increment(1)
-                    });
-                    console.log(`Compteur de parrainage mis à jour pour le parrain avec le code ${referredByCode}.`);
+                    const referrerData = referrerDoc.data();
+
+                    // 1. On calcule le nouveau nombre de filleuls
+                    const newReferralCount = (referrerData.referralCount || 0) + 1;
+                    
+                    // 2. On met à jour le compteur du parrain (le "parent")
+                    await referrerDoc.ref.update({ referralCount: newReferralCount });
+                    console.log(`[Parrainage] Compteur de ${referrerData.telegramId} passe à ${newReferralCount}.`);
+
+                    // 3. Si le parrain devient "actif" (2 filleuls) ET qu'il n'a pas déjà payé son propre parrain
+                    if (newReferralCount === 2 && !referrerData.isReferralActive) {
+                        console.log(`[Parrainage] Le parrain ${referrerData.telegramId} devient ACTIF !`);
+
+                        // On le marque comme actif pour éviter de futurs paiements
+                        await referrerDoc.ref.update({ isReferralActive: true });
+
+                        // 4. On trouve et on paie le "grand-parrain"
+                        const grandParentCode = referrerData.referredBy;
+                        if (grandParentCode) {
+                            const grandParentSnapshot = await usersRef.where('referralCode', '==', grandParentCode).limit(1).get();
+                            if (!grandParentSnapshot.empty) {
+                                const grandParentDoc = grandParentSnapshot.docs[0];
+                                await grandParentDoc.ref.update({
+                                    referralEarnings: admin.firestore.FieldValue.increment(REFERRAL_COMMISSION_USDT)
+                                });
+                                console.log(`[Commission] ${REFERRAL_COMMISSION_USDT.toFixed(4)} USDT versés au grand-parrain ${grandParentDoc.data().telegramId}`);
+                            }
+                        }
+                    }
+                    // --- FIN DE LA MODIFICATION MAJEURE ---
                 }
             }
         } else {
@@ -884,11 +919,25 @@ app.post('/api/miniapp/user-check-in', async (req, res) => {
         
         res.status(200).json({ message: "Check-in réussi." });
 
+        if (wasReferred) {
+            try {
+                const firstName = user.first_name ? `, ${escapeMarkdownV2(user.first_name)}` : '';
+                const welcomeMessage = `🎉 Bienvenue sur ATEX${firstName} \\! 🎉\n\nVous avez rejoint notre communauté grâce à une invitation\\. Explorez nos services pour acheter et vendre des cryptos en toute simplicité\\.`;
+                await miniAppBot.sendMessage(user.id, welcomeMessage, { parse_mode: 'MarkdownV2' });
+                console.log(`Message de bienvenue de parrainage envoyé à ${user.id}.`);
+            } catch (botError) {
+                console.error(`Impossible d'envoyer le message de bienvenue à ${user.id}: ${botError.message}`);
+            }
+        }
+
     } catch (error) {
         console.error("Erreur lors du user-check-in:", error);
-        res.status(500).json({ message: "Erreur interne du serveur." });
+        if (!res.headersSent) {
+            res.status(500).json({ message: "Erreur interne du serveur." });
+        }
     }
 });
+
 
 // ================= ROUTES KYC UTILISATEUR =================
 
