@@ -866,7 +866,7 @@ if (txData.type === 'buy') {
     const paymentInfo = PAYMENT_DETAILS[txData.paymentMethod];
     if (paymentInfo) {
         const userFirstName = escapeMarkdownV2(txData.telegramUsername || 'Client');
-        const paymentMessage = `
+ const paymentMessage = `
 Bonjour ${userFirstName}\\! 👋
 Votre demande d'achat a bien été reçue et est en cours de traitement\\.
 
@@ -874,7 +874,7 @@ Pour finaliser, veuillez effectuer le paiement sur le numéro ci\\-dessous :
 
 🧾 *Opérateur :* ${escapeMarkdownV2(paymentInfo.name)}
 📞 *Numéro :* \`${escapeMarkdownV2(paymentInfo.number)}\`
-_(Appuyez sur le numéro pour le copier facilement)_
+_(Appuyez sur le numéro pour le copier facilement\\)_
 
 ⚠️ *Important :* Si vous n'êtes pas au ${escapeMarkdownV2(paymentInfo.country)}, assurez\\-vous d'effectuer un **transfert international**\\.
 
