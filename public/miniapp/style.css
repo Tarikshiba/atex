@@ -313,3 +313,41 @@ nav button.active {
 .radio-group label {
     margin-bottom: 0; /* Annule la marge par défaut des labels dans les groupes radio */
 }
+
+/* --- NOUVEAUX STYLES POUR LES LISTES DE FILLEULS --- */
+.referral-details {
+    margin-top: 20px;
+}
+.referral-list-container {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+}
+.referral-list-container h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #333;
+    font-size: 1em;
+    display: flex;
+    justify-content: space-between;
+}
+.referral-list {
+    max-height: 150px; /* Limite la hauteur pour les longues listes */
+    overflow-y: auto; /* Ajoute un scroll si nécessaire */
+}
+.referral-item, .referral-item-empty {
+    font-size: 0.95em;
+    padding: 8px 5px;
+    border-bottom: 1px solid #f0f2f5;
+    color: #333;
+}
+.referral-item:last-child {
+    border-bottom: none;
+}
+.referral-item-empty {
+    color: #65676b;
+    font-style: italic;
+    padding: 8px 0;
+}

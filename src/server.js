@@ -12,9 +12,16 @@ const axios = require('axios');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
-// --- CONFIGURATION DE LA COMMISSION DE PARRAINAGE ---
-// TODO: Ajuster le taux de change FCFA -> USDT si nécessaire
-const REFERRAL_COMMISSION_USDT = 25 / 615; // 25 FCFA convertis en USDT (taux ~615)
+// --- NOUVELLE CONFIGURATION DES RÉCOMPENSES ET PAIEMENTS ---
+const REFERRAL_REWARD_USDT = 0.04; // Récompense de 25 FCFA (~0.04 USDT)
+const ACTIVATION_REFERRAL_COUNT = 2; // Nombre de filleuls requis pour devenir actif
+
+const PAYMENT_DETAILS = {
+    'moov-togo': { number: '+22898216099', country: 'Togo', name: 'Moov Money (Togo)' },
+    'yas-togo': { number: '+22871450716', country: 'Togo', name: 'YAS (Togo)' },
+    'wave-senegal': { number: '+221777054493', country: 'Sénégal', name: 'Wave (Sénégal)' },
+    'orange-senegal': { number: '+221786800112', country: 'Sénégal', name: 'Orange Money (Sénégal)' }
+};
 
 function escapeMarkdownV2(text) {
   if (text === null || typeof text === 'undefined') {
@@ -57,6 +64,52 @@ const upload = multer({ storage: storage });
 // On initialise DEUX bots distincts avec leurs propres tokens
 const adminBot = new TelegramBot(process.env.TELEGRAM_ADMIN_BOT_TOKEN, { polling: true }); // Pour les notifications
 const miniAppBot = new TelegramBot(process.env.TELEGRAM_MINI_APP_BOT_TOKEN, { polling: true }); // Pour la Mini App
+
+// --- NOUVELLE FONCTION CENTRALE D'ACTIVATION ET DE RÉCOMPENSE ---
+/**
+ * Vérifie si un utilisateur (le "filleul") doit devenir actif et récompense son parrain.
+ * @param {FirebaseFirestore.DocumentSnapshot} filleulDocSnapshot - Le snapshot du document Firestore du filleul.
+ */
+async function processActivationAndReward(filleulDocSnapshot) {
+    const filleulData = filleulDocSnapshot.data();
+    
+    // 1. On ne traite jamais un filleul déjà actif
+    if (filleulData.isActive) {
+        console.log(`[Activation] L'utilisateur ${filleulData.telegramId} est déjà actif. On arrête.`);
+        return;
+    }
+
+    // 2. On vérifie si le filleul a un parrain
+    const parrainCode = filleulData.referredBy;
+    if (!parrainCode) {
+        console.log(`[Activation] L'utilisateur ${filleulData.telegramId} n'a pas de parrain. On arrête.`);
+        return;
+    }
+    
+    console.log(`[Activation] Traitement pour ${filleulData.telegramId}, parrainé par le code ${parrainCode}.`);
+
+    try {
+        // 3. Marquer le filleul comme "actif"
+        await filleulDocSnapshot.ref.update({ isActive: true });
+        console.log(`[Activation] L'utilisateur ${filleulData.telegramId} est maintenant marqué comme ACTIF.`);
+
+        // 4. Trouver et récompenser le parrain
+        const parrainSnapshot = await db.collection('users').where('referralCode', '==', parrainCode).limit(1).get();
+        
+        if (!parrainSnapshot.empty) {
+            const parrainDoc = parrainSnapshot.docs[0];
+            await parrainDoc.ref.update({
+                referralEarnings: admin.firestore.FieldValue.increment(REFERRAL_REWARD_USDT)
+            });
+            console.log(`[Récompense] ${REFERRAL_REWARD_USDT.toFixed(2)} USDT versés au parrain ${parrainDoc.data().telegramId}.`);
+        } else {
+            console.log(`[Récompense] Avertissement: Le parrain avec le code ${parrainCode} est introuvable.`);
+        }
+
+    } catch (error) {
+        console.error(`[Activation] Erreur lors du traitement pour ${filleulData.telegramId}:`, error);
+    }
+}
 
 console.log('Bot de la Mini App démarré et en écoute...');
 
@@ -141,30 +194,63 @@ adminBot.on('callback_query', async (callbackQuery) => {
     const [action, id] = data.split(':');
     adminBot.answerCallbackQuery(callbackQuery.id);
 
-    // --- LOGIQUE POUR LES TRANSACTIONS CLASSIQUES ---
-    if (action === 'approve' || action === 'cancel') {
-        try {
-            const transactionRef = db.collection('transactions').doc(id);
-            const doc = await transactionRef.get();
-            if (!doc.exists) return adminBot.sendMessage(msg.chat.id, "Erreur : Transaction introuvable.");
+  // --- LOGIQUE POUR LES TRANSACTIONS CLASSIQUES ---
+if (action === 'approve' || action === 'cancel') {
+    try {
+        const transactionRef = db.collection('transactions').doc(id);
+        const doc = await transactionRef.get();
+        if (!doc.exists) return adminBot.sendMessage(msg.chat.id, "Erreur : Transaction introuvable.");
 
-            const status = action === 'approve' ? 'completed' : 'cancelled';
-            const emoji = action === 'approve' ? '✅ Approuvée' : '❌ Annulée';
+        const txData = doc.data();
+        const status = action === 'approve' ? 'completed' : 'cancelled';
+        const emoji = action === 'approve' ? '✅ Approuvée' : '❌ Annulée';
 
-            await transactionRef.update({ status });
-
-            const originalMessage = msg.text;
-            const updatedMessage = `${escapeMarkdownV2(originalMessage)}\n\n*STATUT : ${emoji} par ${escapeMarkdownV2(adminUser.first_name)}*`;
-            
-            adminBot.editMessageText(updatedMessage, {
-                chat_id: msg.chat.id, message_id: msg.message_id,
-                parse_mode: 'MarkdownV2', reply_markup: { inline_keyboard: [] }
-            });
-        } catch (error) {
-            console.error("Erreur (callback transaction):", error);
-            adminBot.sendMessage(msg.chat.id, "Une erreur est survenue (transaction).");
+        await transactionRef.update({ status });
+        
+        // --- DÉCLENCHEUR D'ACTIVATION N°1 : PREMIÈRE TRANSACTION COMPLÉTÉE ---
+        if (action === 'approve') {
+            const userSnapshot = await db.collection('users').where('telegramId', '==', txData.telegramId).limit(1).get();
+            if (!userSnapshot.empty) {
+                const userDoc = userSnapshot.docs[0];
+                if (!userDoc.data().isActive) {
+                    console.log(`[Déclencheur] Transaction complétée pour l'utilisateur ${txData.telegramId}. Vérification d'activation...`);
+                    await processActivationAndReward(userDoc);
+                }
+            }
         }
+        // --- FIN DU DÉCLENCHEUR ---
+        
+        // --- NOUVEAU BLOC : NOTIFICATION À L'UTILISATEUR ---
+        let userMessage;
+        const txTypeText = txData.type === 'buy' ? 'd\'achat' : 'de vente';
+
+        if (action === 'approve') {
+            userMessage = `🎉 Bonne nouvelle ! Votre transaction ${txTypeText} de ${txData.amountToSend.toLocaleString('fr-FR')} ${txData.currencyFrom} a été **approuvée**.`;
+        } else { // action === 'cancel'
+            const supportUsername = "SupportAtexBot"; // Placeholder
+            userMessage = `⚠️ Information : Votre transaction ${txTypeText} de ${txData.amountToSend.toLocaleString('fr-FR')} ${txData.currencyFrom} a été **annulée**. Pour en connaître la raison, veuillez contacter notre service client : @${supportUsername}`;
+        }
+
+        try {
+            await miniAppBot.sendMessage(txData.telegramId, userMessage, { parse_mode: 'Markdown' });
+            console.log(`Notification de statut envoyée à l'utilisateur ${txData.telegramId}.`);
+        } catch (error) {
+            console.error(`Impossible d'envoyer la notification à l'utilisateur ${txData.telegramId}:`, error.message);
+        }
+        // --- FIN DU NOUVEAU BLOC ---
+
+        const originalMessage = msg.text;
+        const updatedMessage = `${escapeMarkdownV2(originalMessage)}\n\n*STATUT : ${emoji} par ${escapeMarkdownV2(adminUser.first_name)}*`;
+        
+        adminBot.editMessageText(updatedMessage, {
+            chat_id: msg.chat.id, message_id: msg.message_id,
+            parse_mode: 'MarkdownV2', reply_markup: { inline_keyboard: [] }
+        });
+    } catch (error) {
+        console.error("Erreur (callback transaction):", error);
+        adminBot.sendMessage(msg.chat.id, "Une erreur est survenue (transaction).");
     }
+}
     
     // --- NOUVELLE LOGIQUE POUR LES RETRAITS DE GAINS ---
     if (action === 'approve_withdrawal' || action === 'reject_withdrawal') {
@@ -774,17 +860,43 @@ await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, adminMessage, options);
 // ...
         console.log("Notification de transaction enrichie envoyée à l'admin.");
 
-        // 3. Envoyer la bonne réponse au frontend selon le type de transaction
-        if (txData.type === 'buy') {
-            res.status(200).json({ message: "Votre commande d'achat a été transmise avec succès !" });
-        } else { // type 'sell'
-            const adminUsername = process.env.TELEGRAM_ADMIN_USERNAME;
-            const userMessage = `Bonjour ATEX, je souhaite initier une VENTE :\n- Je vends : ${txData.amountToSend} ${txData.currencyFrom}\n- Pour recevoir : ${Math.round(txData.amountToReceive)} FCFA\n- Mon numéro : ${txData.phoneNumber} (${txData.paymentMethod})`;
-            const encodedMessage = encodeURIComponent(userMessage);
-            const redirectUrl = `https://t.me/${adminUsername}?text=${encodedMessage}`;
-            
-            res.status(200).json({ redirectUrl: redirectUrl });
+        // 3. Envoyer la bonne réponse au frontend et les instructions de paiement
+if (txData.type === 'buy') {
+    // --- NOUVEAU BLOC : ENVOI DES INSTRUCTIONS DE PAIEMENT ---
+    const paymentInfo = PAYMENT_DETAILS[txData.paymentMethod];
+    if (paymentInfo) {
+        const userFirstName = escapeMarkdownV2(txData.telegramUsername || 'Client');
+        const paymentMessage = `
+Bonjour ${userFirstName}\\! 👋
+Votre demande d'achat a bien été reçue et est en cours de traitement\\.
+
+Pour finaliser, veuillez effectuer le paiement sur le numéro ci\\-dessous :
+
+🧾 *Opérateur :* ${escapeMarkdownV2(paymentInfo.name)}
+📞 *Numéro :* \`${escapeMarkdownV2(paymentInfo.number)}\`
+_(Appuyez sur le numéro pour le copier facilement)_
+
+⚠️ *Important :* Si vous n'êtes pas au ${escapeMarkdownV2(paymentInfo.country)}, assurez\\-vous d'effectuer un **transfert international**\\.
+
+Une fois le paiement effectué, notre équipe validera la transaction et vous recevrez vos cryptomonnaies\\.
+        `;
+        try {
+            await miniAppBot.sendMessage(txData.telegramId, paymentMessage, { parse_mode: 'MarkdownV2' });
+            console.log(`Instructions de paiement envoyées à ${txData.telegramId}.`);
+        } catch(e) {
+            console.error(`Erreur lors de l'envoi des instructions à ${txData.telegramId}:`, e.message);
         }
+    }
+    // --- FIN DU NOUVEAU BLOC ---
+    res.status(200).json({ message: "Votre commande a été transmise ! Veuillez consulter vos messages pour les instructions de paiement." });
+} else { // type 'sell'
+    const adminUsername = process.env.TELEGRAM_ADMIN_USERNAME;
+    const userMessage = `Bonjour ATEX, je souhaite initier une VENTE :\n- Je vends : ${txData.amountToSend} ${txData.currencyFrom}\n- Pour recevoir : ${Math.round(txData.amountToReceive)} FCFA\n- Mon numéro : ${txData.phoneNumber} (${txData.paymentMethod})`;
+    const encodedMessage = encodeURIComponent(userMessage);
+    const redirectUrl = `https://t.me/${adminUsername}?text=${encodedMessage}`;
+    
+    res.status(200).json({ redirectUrl: redirectUrl });
+}
 
     } catch (error) {
         console.error("Erreur lors de l'initialisation de la transaction Mini App V2:", error);
@@ -850,11 +962,34 @@ app.get('/api/miniapp/referral-info/:telegramId', async (req, res) => {
 
         const userData = userSnapshot.docs[0].data();
         
-        // On prépare les données à renvoyer
+        // --- NOUVEAU BLOC : RÉCUPÉRER LES FILLEULS ACTIFS ET INACTIFS ---
+        const referralsSnapshot = await usersRef.where('referredBy', '==', userData.referralCode).get();
+        
+        const activeReferrals = [];
+        const inactiveReferrals = [];
+
+        referralsSnapshot.forEach(doc => {
+            const referralData = doc.data();
+            const referralInfo = {
+                // On prend le prénom s'il existe, sinon le username, sinon "Anonyme"
+                name: referralData.firstName || referralData.telegramUsername || 'Anonyme'
+            };
+
+            if (referralData.isActive) {
+                activeReferrals.push(referralInfo);
+            } else {
+                inactiveReferrals.push(referralInfo);
+            }
+        });
+        // --- FIN DU NOUVEAU BLOC ---
+
+        // On prépare les données à renvoyer, en incluant les nouvelles listes
         const referralInfo = {
             referralCode: userData.referralCode,
             referralEarnings: userData.referralEarnings || 0,
             referralCount: userData.referralCount || 0,
+            activeReferrals: activeReferrals,
+            inactiveReferrals: inactiveReferrals
         };
 
         res.status(200).json(referralInfo);
@@ -864,7 +999,6 @@ app.get('/api/miniapp/referral-info/:telegramId', async (req, res) => {
         res.status(500).json({ message: "Erreur interne du serveur." });
     }
 });
-
 
 // ===============================================
 // ROUTE DE CHECK-IN UTILISATEUR (POUR PARRAINAGE)
@@ -893,52 +1027,38 @@ app.post('/api/miniapp/user-check-in', async (req, res) => {
                 referralCode: newReferralCode,
                 referredBy: referredByCode || null,
                 referralCount: 0,
-                isReferralActive: false,
+                isActive: false,
                 referralEarnings: 0,
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
             };
             await usersRef.add(newUser);
             console.log(`Nouvel utilisateur ${user.id} créé avec le code ${newReferralCode}.`);
 
-            if (referredByCode) {
-                wasReferred = true;
-                const referrerSnapshot = await usersRef.where('referralCode', '==', referredByCode).limit(1).get();
+           if (referredByCode) {
+    wasReferred = true;
+    const referrerSnapshot = await usersRef.where('referralCode', '==', referredByCode).limit(1).get();
 
-                if (!referrerSnapshot.empty) {
-                    // --- MODIFICATION MAJEURE POUR LA LOGIQUE DE COMMISSION ---
-                    const referrerDoc = referrerSnapshot.docs[0];
-                    const referrerData = referrerDoc.data();
-
-                    // 1. On calcule le nouveau nombre de filleuls
-                    const newReferralCount = (referrerData.referralCount || 0) + 1;
-                    
-                    // 2. On met à jour le compteur du parrain (le "parent")
-                    await referrerDoc.ref.update({ referralCount: newReferralCount });
-                    console.log(`[Parrainage] Compteur de ${referrerData.telegramId} passe à ${newReferralCount}.`);
-
-                    // 3. Si le parrain devient "actif" (2 filleuls) ET qu'il n'a pas déjà payé son propre parrain
-                    if (newReferralCount === 2 && !referrerData.isReferralActive) {
-                        console.log(`[Parrainage] Le parrain ${referrerData.telegramId} devient ACTIF !`);
-
-                        // On le marque comme actif pour éviter de futurs paiements
-                        await referrerDoc.ref.update({ isReferralActive: true });
-
-                        // 4. On trouve et on paie le "grand-parrain"
-                        const grandParentCode = referrerData.referredBy;
-                        if (grandParentCode) {
-                            const grandParentSnapshot = await usersRef.where('referralCode', '==', grandParentCode).limit(1).get();
-                            if (!grandParentSnapshot.empty) {
-                                const grandParentDoc = grandParentSnapshot.docs[0];
-                                await grandParentDoc.ref.update({
-                                    referralEarnings: admin.firestore.FieldValue.increment(REFERRAL_COMMISSION_USDT)
-                                });
-                                console.log(`[Commission] ${REFERRAL_COMMISSION_USDT.toFixed(4)} USDT versés au grand-parrain ${grandParentDoc.data().telegramId}`);
-                            }
-                        }
-                    }
-                    // --- FIN DE LA MODIFICATION MAJEURE ---
-                }
-            }
+    if (!referrerSnapshot.empty) {
+        const referrerDoc = referrerSnapshot.docs[0];
+        
+        // On incrémente le compteur du parrain
+        await referrerDoc.ref.update({
+            referralCount: admin.firestore.FieldValue.increment(1)
+        });
+        
+        // --- DÉCLENCHEUR D'ACTIVATION N°2 : LE PARRAIN ATTEINT 2 FILLEULS ---
+        // On récupère la donnée la plus fraîche du parrain après l'incrémentation
+        const updatedReferrerDoc = await referrerDoc.ref.get();
+        const updatedReferrerData = updatedReferrerDoc.data();
+        
+        // Si le parrain atteint le seuil requis ET n'est pas déjà actif
+        if (updatedReferrerData.referralCount >= ACTIVATION_REFERRAL_COUNT && !updatedReferrerData.isActive) {
+            console.log(`[Déclencheur] Le parrain ${updatedReferrerData.telegramId} a atteint ${ACTIVATION_REFERRAL_COUNT} filleuls. Vérification d'activation...`);
+            await processActivationAndReward(updatedReferrerDoc);
+        }
+        // --- FIN DU DÉCLENCHEUR ---
+    }
+}
         } else {
              console.log(`Check-in: Utilisateur existant ${user.id}.`);
         }

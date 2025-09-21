@@ -105,23 +105,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function displayReferralInfo() {
-        const user = tg.initDataUnsafe?.user;
-        if (!user) return;
-        try {
-            const response = await fetch(`/api/miniapp/referral-info/${user.id}`);
-            if (!response.ok) throw new Error('Erreur réseau.');
-            const info = await response.json();
-            const botUsername = "AtexOfficielBot";
-            const shortAppName = "atexly";
-            const referralLink = `https://t.me/${botUsername}/${shortAppName}?startapp=${info.referralCode}`;
-            referralLinkSpan.textContent = referralLink;
-            totalEarningsP.textContent = `${(info.referralEarnings || 0).toFixed(2)} USDT`;
-            referralCountP.textContent = info.referralCount || 0;
-        } catch (error) {
-            console.error("Erreur fetch parrainage:", error);
-            referralLinkSpan.textContent = "Erreur de chargement.";
+    const user = tg.initDataUnsafe?.user;
+    if (!user) return;
+    try {
+        const response = await fetch(`/api/miniapp/referral-info/${user.id}`);
+        if (!response.ok) throw new Error('Erreur réseau.');
+        const info = await response.json();
+        
+        // --- MISE À JOUR DES INFOS GÉNÉRALES (inchangé) ---
+        const botUsername = "AtexOfficielBot";
+        const shortAppName = "atexly";
+        const referralLink = `https://t.me/${botUsername}/${shortAppName}?startapp=${info.referralCode}`;
+        referralLinkSpan.textContent = referralLink;
+        totalEarningsP.textContent = `${(info.referralEarnings || 0).toFixed(2)} USDT`;
+        referralCountP.textContent = info.referralCount || 0;
+
+        // --- NOUVEAU BLOC : AFFICHAGE DES LISTES DE FILLEULS ---
+        const activeContainer = document.getElementById('active-referrals-list');
+        const inactiveContainer = document.getElementById('inactive-referrals-list');
+
+        // Vider les anciens contenus
+        activeContainer.innerHTML = '';
+        inactiveContainer.innerHTML = '';
+
+        // Mettre à jour les en-têtes avec les comptes
+        document.querySelector('#active-referrals-header span').textContent = `(${info.activeReferrals.length})`;
+        document.querySelector('#inactive-referrals-header span').textContent = `(${info.inactiveReferrals.length})`;
+
+        // Remplir la liste des actifs
+        if (info.activeReferrals.length > 0) {
+            info.activeReferrals.forEach(ref => {
+                const p = document.createElement('p');
+                p.className = 'referral-item';
+                p.textContent = `👤 ${ref.name}`;
+                activeContainer.appendChild(p);
+            });
+        } else {
+            activeContainer.innerHTML = '<p class="referral-item-empty">Aucun filleul actif.</p>';
         }
+
+        // Remplir la liste des inactifs
+        if (info.inactiveReferrals.length > 0) {
+            info.inactiveReferrals.forEach(ref => {
+                const p = document.createElement('p');
+                p.className = 'referral-item';
+                p.textContent = `👤 ${ref.name}`;
+                inactiveContainer.appendChild(p);
+            });
+        } else {
+            inactiveContainer.innerHTML = '<p class="referral-item-empty">Aucun filleul en attente.</p>';
+        }
+        // --- FIN DU NOUVEAU BLOC ---
+
+    } catch (error) {
+        console.error("Erreur fetch parrainage:", error);
+        referralLinkSpan.textContent = "Erreur de chargement.";
     }
+}
 
     // --- LOGIQUE DU CALCULATEUR ---
     function calculate() {
