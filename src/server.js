@@ -882,7 +882,7 @@ _\\(Appuyez sur le numéro pour le copier facilement\\)_
 
 Une fois le paiement effectué, notre équipe validera la transaction et vous recevrez vos cryptomonnaies\\.
 
-⚠️*Après avoir payé, merci d'envoyer la capture d'écran de la transaction à notre support client : @AtexlySupportBot*
+🚨*Après avoir payé, merci d'envoyer la capture d'écran de la transaction à notre support client : @AtexlySupportBot*
         `;
         try {
             await miniAppBot.sendMessage(txData.telegramId, paymentMessage, { parse_mode: 'MarkdownV2' });
