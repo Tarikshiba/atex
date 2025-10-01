@@ -227,8 +227,9 @@ if (action === 'approve' || action === 'cancel') {
         if (action === 'approve') {
             userMessage = `🎉 Bonne nouvelle ! Votre transaction ${txTypeText} de ${txData.amountToSend.toLocaleString('fr-FR')} ${txData.currencyFrom} a été **approuvée**.`;
         } else { // action === 'cancel'
-            const supportUsername = "SupportAtexBot"; // Placeholder
-            userMessage = `⚠️ Information : Votre transaction ${txTypeText} de ${txData.amountToSend.toLocaleString('fr-FR')} ${txData.currencyFrom} a été **annulée**. Pour en connaître la raison, veuillez contacter notre service client : @${supportUsername}`;
+           
+          const supportUsername = "AtexlySupportBot"; // ✅ Corrigé
+          userMessage = `⚠️ Information : Votre transaction ${txTypeText} de ${txData.amountToSend.toLocaleString('fr-FR')} ${txData.currencyFrom} a été **annulée**. Pour en connaître la raison, veuillez contacter notre service client : @${supportUsername}`;
         }
 
         try {
@@ -866,7 +867,8 @@ if (txData.type === 'buy') {
     const paymentInfo = PAYMENT_DETAILS[txData.paymentMethod];
     if (paymentInfo) {
         const userFirstName = escapeMarkdownV2(txData.telegramUsername || 'Client');
- const paymentMessage = `
+// Lignes 931 à 946 dans server.js
+const paymentMessage = `
 Bonjour ${userFirstName}\\! 👋
 Votre demande d'achat a bien été reçue et est en cours de traitement\\.
 
@@ -879,6 +881,8 @@ _\\(Appuyez sur le numéro pour le copier facilement\\)_
 ⚠️ *Important :* Si vous n'êtes pas au ${escapeMarkdownV2(paymentInfo.country)}, assurez\\-vous d'effectuer un **transfert international**\\.
 
 Une fois le paiement effectué, notre équipe validera la transaction et vous recevrez vos cryptomonnaies\\.
+
+*Après avoir payé, merci d'envoyer la capture d'écran de la transaction à notre support client : @AtexlySupportBot*
         `;
         try {
             await miniAppBot.sendMessage(txData.telegramId, paymentMessage, { parse_mode: 'MarkdownV2' });
