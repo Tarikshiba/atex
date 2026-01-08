@@ -571,6 +571,71 @@ app.put('/api/admin/transactions/:id/status', verifyAdminToken, async (req, res)
     }
 });
 
+// ==================================================================
+// NOUVELLES ROUTES ADMIN : GESTION DES CRYPTOS & WALLETS (DYNAMIQUE)
+// ==================================================================
+
+// 1. Récupérer la configuration complète des cryptos
+app.get('/api/admin/cryptos', verifyAdminToken, async (req, res) => {
+    try {
+        const doc = await db.collection('configuration').doc('crypto_list').get();
+        // Si pas de config, on renvoie une liste vide
+        res.status(200).json(doc.exists ? doc.data().list || [] : []);
+    } catch (error) {
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// 2. Ajouter ou Mettre à jour une crypto
+app.post('/api/admin/cryptos', verifyAdminToken, async (req, res) => {
+    try {
+        const newCrypto = req.body; // { id, name, symbol, network, walletAddress, ... }
+        if (!newCrypto.symbol || !newCrypto.id) return res.status(400).json({ message: "Données invalides." });
+
+        const docRef = db.collection('configuration').doc('crypto_list');
+        
+        await db.runTransaction(async (t) => {
+            const doc = await t.get(docRef);
+            let list = doc.exists ? (doc.data().list || []) : [];
+            
+            // On vérifie si l'ID existe déjà pour mettre à jour, sinon on ajoute
+            const index = list.findIndex(c => c.id === newCrypto.id);
+            if (index > -1) {
+                list[index] = { ...list[index], ...newCrypto }; // Mise à jour
+            } else {
+                list.push(newCrypto); // Ajout
+            }
+            
+            t.set(docRef, { list });
+        });
+
+        res.status(200).json({ message: "Configuration crypto mise à jour." });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// 3. Supprimer une crypto
+app.delete('/api/admin/cryptos/:id', verifyAdminToken, async (req, res) => {
+    try {
+        const cryptoId = req.params.id;
+        const docRef = db.collection('configuration').doc('crypto_list');
+
+        await db.runTransaction(async (t) => {
+            const doc = await t.get(docRef);
+            if (!doc.exists) return;
+            let list = doc.data().list || [];
+            list = list.filter(c => c.id !== cryptoId);
+            t.set(docRef, { list });
+        });
+
+        res.status(200).json({ message: "Crypto supprimée." });
+    } catch (error) {
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
 // ================= ROUTES API ADMIN (tarification V4) =================
 
 // Route pour récupérer les taux de change manuels
@@ -894,12 +959,56 @@ Une fois le paiement effectué, notre équipe validera la transaction et vous re
     // --- FIN DU NOUVEAU BLOC ---
     res.status(200).json({ message: "Votre commande a été transmise ! Veuillez consulter vos messages pour les instructions de paiement." });
 } else { // type 'sell'
-    const adminUsername = process.env.TELEGRAM_ADMIN_USERNAME;
-    const userMessage = `Bonjour ATEX, je souhaite initier une VENTE :\n- Je vends : ${txData.amountToSend} ${txData.currencyFrom}\n- Pour recevoir : ${Math.round(txData.amountToReceive)} FCFA\n- Mon numéro : ${txData.phoneNumber} (${txData.paymentMethod})`;
-    const encodedMessage = encodeURIComponent(userMessage);
-    const redirectUrl = `https://t.me/${adminUsername}?text=${encodedMessage}`;
+    // --- NOUVELLE LOGIQUE VENTE DYNAMIQUE ---
     
-    res.status(200).json({ redirectUrl: redirectUrl });
+    // 1. Récupérer la liste des cryptos pour trouver le bon wallet
+    const cryptoListDoc = await db.collection('configuration').doc('crypto_list').get();
+    const cryptos = cryptoListDoc.exists ? cryptoListDoc.data().list : [];
+    
+    // On cherche la crypto correspondante. 
+    // Note: Le frontend enverra 'USDT (TRC20)' ou l'ID si on le met à jour plus tard.
+    // Ici on fait une recherche souple pour trouver l'adresse.
+    const foundCrypto = cryptos.find(c => c.symbol === txData.currencyFrom || c.name === txData.currencyFrom) 
+                     || cryptos.find(c => txData.currencyFrom.includes(c.symbol));
+                     
+    // Adresse par défaut si introuvable (sécurité)
+    const targetWallet = foundCrypto ? foundCrypto.walletAddress : "Adresse non disponible. Contactez le support.";
+    const networkInfo = foundCrypto ? foundCrypto.network : "Réseau standard";
+
+    const userFirstName = escapeMarkdownV2(txData.telegramUsername || 'Client');
+    const cryptoAmount = escapeMarkdownV2(txData.amountToSend.toString());
+    const cryptoSymbol = escapeMarkdownV2(txData.currencyFrom);
+    const receiveAmount = escapeMarkdownV2(Math.round(txData.amountToReceive).toLocaleString('fr-FR'));
+    const safeTargetWallet = escapeMarkdownV2(targetWallet);
+    const safeNetwork = escapeMarkdownV2(networkInfo);
+
+    const sellMessage = `
+Bonjour ${userFirstName}\\! 👋
+Votre demande de *vente* a bien été enregistrée\\.
+
+🔹 Vous vendez : *${cryptoAmount} ${cryptoSymbol}*
+🔹 Vous recevez : *${receiveAmount} FCFA*
+
+Pour finaliser, veuillez envoyer vos cryptos à l'adresse suivante :
+
+📥 *Adresse de dépôt ${cryptoSymbol} \\(${safeNetwork}\\) :*
+\`${safeTargetWallet}\`
+_\\(Appuyez sur l'adresse pour copier\\)_
+
+⚠️ *Important :* Vérifiez bien le réseau *${safeNetwork}* avant d'envoyer\\.
+
+🚨 *Une fois l'envoi effectué, envoyez la capture d'écran (hash) à notre support :* @AtexlySupportBot
+    `;
+
+    try {
+        await miniAppBot.sendMessage(txData.telegramId, sellMessage, { parse_mode: 'MarkdownV2' });
+        console.log(`Instructions de vente envoyées à ${txData.telegramId}.`);
+    } catch(e) {
+        console.error(`Erreur envoi instructions vente à ${txData.telegramId}:`, e.message);
+    }
+
+    // On renvoie un message de succès simple, plus de redirection
+    res.status(200).json({ message: "Ordre de vente initié ! Consultez le bot pour l'adresse de dépôt." });
 }
 
     } catch (error) {
@@ -1324,31 +1433,50 @@ app.post('/api/cron/update-prices', async (req, res) => {
 
 app.get('/api/config', async (req, res) => {
     try {
-        // 1. Récupérer les prix en temps réel (Crypto -> USDT)
+        // 1. Récupérer les prix en temps réel
         const realTimePricesDoc = await db.collection('market_data').doc('realtime_usdt_prices').get();
-        if (!realTimePricesDoc.exists) throw new Error("Prix du marché non disponibles.");
-        const realTimePrices = realTimePricesDoc.data().prices;
+        const realTimePrices = realTimePricesDoc.exists ? realTimePricesDoc.data().prices : {};
 
-        // 2. Récupérer les taux de change manuels (USDT -> FCFA)
+        // 2. Récupérer les taux manuels
         const manualRatesDoc = await db.collection('configuration').doc('manual_rates').get();
-        if (!manualRatesDoc.exists) throw new Error("Taux de change non configurés par l'admin.");
-        const manualRates = manualRatesDoc.data().rates;
+        const manualRates = manualRatesDoc.exists ? manualRatesDoc.data().rates : {};
 
-        // 3. Calculer les prix finaux en FCFA
+        // 3. (NOUVEAU) Récupérer la liste des cryptos actives
+        const cryptoListDoc = await db.collection('configuration').doc('crypto_list').get();
+        const activeCryptos = cryptoListDoc.exists ? (cryptoListDoc.data().list || []) : [];
+
+        // 4. Calculer les prix finaux (dynamique)
         const finalAtexPrices = {};
-        for (const crypto in realTimePrices) {
-            if (manualRates[crypto]) {
-                const priceInUSDT = realTimePrices[crypto];
-                const ratesForCrypto = manualRates[crypto];
+        
+        // On ne génère des prix QUE pour les cryptos qui sont dans notre liste active
+        // Si la liste est vide (premier lancement), on utilise les anciennes clés manuelles par sécurité ou on renvoie vide.
+        const keysToProcess = activeCryptos.length > 0 ? activeCryptos.map(c => c.id) : Object.keys(manualRates);
 
-                finalAtexPrices[crypto] = {
-                    buy: priceInUSDT * ratesForCrypto.buy,
-                    sell: priceInUSDT * ratesForCrypto.sell
+        keysToProcess.forEach(key => {
+            // Trouver le symbole pour chercher le prix marché (ex: 'btc' pour l'ID 'btc_bep20')
+            // Si on utilise la nouvelle liste, on prend 'marketKey' ou 'symbol', sinon on devine.
+            let marketKey = key;
+            if (activeCryptos.length > 0) {
+                 const cryptoConf = activeCryptos.find(c => c.id === key);
+                 if (cryptoConf) marketKey = (cryptoConf.marketKey || cryptoConf.symbol).toLowerCase();
+            } else {
+                 // Fallback pour compatibilité ancienne config
+                 marketKey = key.split('_')[0]; 
+            }
+
+            if (manualRates[key] && realTimePrices[marketKey]) {
+                const priceInUSDT = realTimePrices[marketKey];
+                finalAtexPrices[key] = {
+                    buy: priceInUSDT * (manualRates[key].buy || 0),
+                    sell: priceInUSDT * (manualRates[key].sell || 0)
                 };
             }
-        }
+        });
         
-        res.status(200).json({ atexPrices: finalAtexPrices });
+        res.status(200).json({ 
+            atexPrices: finalAtexPrices,
+            availableCryptos: activeCryptos // C'est ici que la magie opère pour le frontend
+        });
 
     } catch (error) {
         console.error("Erreur lors de la construction de la configuration des prix:", error);

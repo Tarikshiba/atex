@@ -6,106 +6,103 @@
     <title>Dashboard Admin - ATEX</title>
     <link rel="icon" href="/images/favicon.png" type="image/png">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
     <div class="container mx-auto p-8">
         <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-teal-400">Tableau de Bord Administrateur</h1>
-            <button id="logout-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                Déconnexion
+            <h1 class="text-3xl font-bold text-teal-400">ATEX - Admin Center</h1>
+            <button id="logout-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition">
+                <i class="fas fa-sign-out-alt"></i> Déconnexion
             </button>
         </div>
         
-        <div id="dashboard-content" class="bg-gray-800 p-6 rounded-lg shadow-lg">
-            <h2 class="text-xl font-semibold mb-4">Transactions en attente</h2>
-            <p>Chargement des transactions...</p>
+        <div id="dashboard-content" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+            <h2 class="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">Transactions en attente</h2>
+            <p class="text-gray-400">Chargement...</p>
         </div>
 
-     <div class="mt-8 bg-gray-800 p-6 rounded-lg shadow-lg">
-    <h2 class="text-xl font-semibold mb-4">Gestion des Taux de Change (USDT ⇆ FCFA)</h2>
-    <p class="text-sm text-gray-400 mb-6">
-        Défini ici la marge pour chaque cryptomonnaie. Ces taux seront multipliés par le prix du marché en temps réel (ex: BTC/USDT) pour obtenir le prix final en FCFA.
-    </p>
-   <form id="pricing-form" class="space-y-4">
-    <div>
-        <label class="font-bold text-yellow-400">USDT (Tether TRC20)</label>
-        <div class="grid md:grid-cols-2 gap-4 mt-2">
-            <input type="number" step="any" id="usdt-buy-rate" name="usdt-buy-rate" placeholder="Taux d'achat (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            <input type="number" step="any" id="usdt-sell-rate" name="usdt-sell-rate" placeholder="Taux de vente (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-yellow-400">Gestion des Cryptos & Wallets</h2>
+                <button onclick="document.getElementById('add-crypto-modal').classList.remove('hidden')" class="bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded text-sm font-bold shadow transition">
+                    <i class="fas fa-plus"></i> + Ajouter une Crypto
+                </button>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-gray-400">
+                    <thead class="bg-gray-700 text-gray-200 uppercase">
+                        <tr>
+                            <th class="px-4 py-3">ID</th>
+                            <th class="px-4 py-3">Nom</th>
+                            <th class="px-4 py-3">Réseau</th>
+                            <th class="px-4 py-3">Wallet Admin</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="crypto-list-body">
+                        </tbody>
+                </table>
+            </div>
         </div>
-    </div>
-    <div>
-        <label class="font-bold text-yellow-400">USDT (BEP20)</label>
-        <div class="grid md:grid-cols-2 gap-4 mt-2">
-            <input type="number" step="any" id="usdt_bep20-buy-rate" name="usdt_bep20-buy-rate" placeholder="Taux d'achat (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            <input type="number" step="any" id="usdt_bep20-sell-rate" name="usdt_bep20-sell-rate" placeholder="Taux de vente (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-12">
+            <h2 class="text-xl font-semibold mb-4 text-green-400">Configuration des Taux (USDT ⇆ FCFA)</h2>
+            <p class="text-sm text-gray-500 mb-6">Ces taux sont générés automatiquement en fonction des cryptos ajoutées ci-dessus.</p>
+            
+            <form id="pricing-form" class="space-y-4">
+                <div id="dynamic-rates-container" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    </div>
+
+                <button type="submit" class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 rounded mt-6 shadow-lg transition transform hover:scale-[1.01]">
+                    Mettre à jour tous les taux
+                </button>
+                <p id="pricing-feedback" class="mt-2 text-center text-sm font-medium"></p>
+            </form>
         </div>
+
     </div>
-    <div>
-        <label class="font-bold text-teal-400">BTC (Bitcoin)</label>
-        <div class="grid md:grid-cols-2 gap-4 mt-2">
-            <input type="number" step="any" id="btc-buy-rate" name="btc-buy-rate" placeholder="Taux d'achat (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            <input type="number" step="any" id="btc-sell-rate" name="btc-sell-rate" placeholder="Taux de vente (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-        </div>
-    </div>
-    <div>
-        <label class="font-bold text-teal-400">BTC (BEP20)</label>
-        <div class="grid md:grid-cols-2 gap-4 mt-2">
-            <input type="number" step="any" id="btc_bep20-buy-rate" name="btc_bep20-buy-rate" placeholder="Taux d'achat (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            <input type="number" step="any" id="btc_bep20-sell-rate" name="btc_bep20-sell-rate" placeholder="Taux de vente (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-        </div>
-    </div>
-    <div>
-        <label class="font-bold text-teal-400">ETH (Ethereum)</label>
-        <div class="grid md:grid-cols-2 gap-4 mt-2">
-            <input type="number" step="any" id="eth-buy-rate" name="eth-buy-rate" placeholder="Taux d'achat (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            <input type="number" step="any" id="eth-sell-rate" name="eth-sell-rate" placeholder="Taux de vente (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-        </div>
-    </div>
-    <div>
-        <label class="font-bold text-teal-400">BNB (Binance Coin)</label>
-        <div class="grid md:grid-cols-2 gap-4 mt-2">
-            <input type="number" step="any" id="bnb-buy-rate" name="bnb-buy-rate" placeholder="Taux d'achat (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            <input type="number" step="any" id="bnb-sell-rate" name="bnb-sell-rate" placeholder="Taux de vente (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-        </div>
-    </div>
-    <div>
-        <label class="font-bold text-teal-400">TRX (Tron)</label>
-        <div class="grid md:grid-cols-2 gap-4 mt-2">
-            <input type="number" step="any" id="trx-buy-rate" name="trx-buy-rate" placeholder="Taux d'achat (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            <input type="number" step="any" id="trx-sell-rate" name="trx-sell-rate" placeholder="Taux de vente (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-        </div>
-    </div>
-    <div>
-        <label class="font-bold text-teal-400">XRP (Ripple)</label>
-        <div class="grid md:grid-cols-2 gap-4 mt-2">
-            <input type="number" step="any" id="xrp-buy-rate" name="xrp-buy-rate" placeholder="Taux d'achat (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            <input type="number" step="any" id="xrp-sell-rate" name="xrp-sell-rate" placeholder="Taux de vente (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-        </div>
-    </div>
-    <div>
-        <label class="font-bold text-teal-400">Polygon (MATIC)</label>
-        <div class="grid md:grid-cols-2 gap-4 mt-2">
-            <input type="number" step="any" id="matic-buy-rate" name="matic-buy-rate" placeholder="Taux d'achat (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            <input type="number" step="any" id="matic-sell-rate" name="matic-sell-rate" placeholder="Taux de vente (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-        </div>
-    </div>
-    <div>
-        <label class="font-bold text-teal-400">Toncoin (TON)</label>
-        <div class="grid md:grid-cols-2 gap-4 mt-2">
-            <input type="number" step="any" id="ton-buy-rate" name="ton-buy-rate" placeholder="Taux d'achat (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
-            <input type="number" step="any" id="ton-sell-rate" name="ton-sell-rate" placeholder="Taux de vente (FCFA)" class="w-full p-2.5 bg-gray-700 border border-gray-600 rounded-lg">
+
+    <div id="add-crypto-modal" class="fixed inset-0 bg-black bg-opacity-80 hidden flex justify-center items-center z-50 backdrop-blur-sm">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md border border-gray-700">
+            <h3 class="text-xl font-bold mb-6 text-white text-center">Ajouter une Crypto</h3>
+            <form id="add-crypto-form" class="space-y-4">
+                <div>
+                    <label for="new-id" class="text-xs text-gray-400 mb-1 block">ID Unique (ex: usdt_trc20)</label>
+                    <input type="text" id="new-id" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none transition" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="new-name" class="text-xs text-gray-400 mb-1 block">Nom (ex: USDT TRC20)</label>
+                        <input type="text" id="new-name" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none" required>
+                    </div>
+                    <div>
+                        <label for="new-symbol" class="text-xs text-gray-400 mb-1 block">Symbole (ex: USDT)</label>
+                        <input type="text" id="new-symbol" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none" required>
+                    </div>
+                </div>
+                <div>
+                    <label for="new-network" class="text-xs text-gray-400 mb-1 block">Réseau (ex: TRC20, BEP20, Bitcoin)</label>
+                    <input type="text" id="new-network" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none" required>
+                </div>
+                <div>
+                    <label for="new-wallet" class="text-xs text-gray-400 mb-1 block">Votre Adresse de Réception (Wallet)</label>
+                    <input type="text" id="new-wallet" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none font-mono text-sm" required>
+                </div>
+                <div>
+                    <label for="new-market-key" class="text-xs text-gray-500 mb-1 block">Clé CoinMarketCap (ex: btc, eth, usdt)</label>
+                    <input type="text" id="new-market-key" placeholder="Laisser vide si identique au symbole" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none text-sm">
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-700">
+                    <button type="button" onclick="document.getElementById('add-crypto-modal').classList.add('hidden')" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-white transition">Annuler</button>
+                    <button type="submit" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 rounded text-white font-bold transition">Ajouter</button>
+                </div>
+            </form>
         </div>
     </div>
 
-    <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 font-medium rounded-lg text-sm px-5 py-2.5 text-center !mt-8">
-        Enregistrer les Taux
-    </button>
-    <p id="pricing-feedback" class="mt-3 text-center text-sm h-4"></p>
-</form>
-</div>
-
-    </div> <script src="/admin/dashboard_admin.js"></script>
+    <script src="/admin/dashboard_admin.js"></script>
 </body>
 </html>
