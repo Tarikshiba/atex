@@ -23,6 +23,40 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     let pressArticlePage = 1; // Variable pour suivre la page des articles
 
+    // --- HELPER : Récupérer l'objet crypto complet ---
+    function getCryptoById(id) {
+        if (!state.config.availableCryptos) return null;
+        return state.config.availableCryptos.find(c => c.id === id);
+    }
+
+    // --- POPULATION DES MENUS DÉROULANTS ---
+    function populateCryptoSelects(cryptos) {
+        const selects = [cryptoSelectBuy, cryptoSelectSell];
+        
+        selects.forEach(select => {
+            if (!select) return;
+            select.innerHTML = ''; // On vide "Chargement..."
+            
+            if (!cryptos || cryptos.length === 0) {
+                const opt = document.createElement('option');
+                opt.text = "Aucune crypto disponible";
+                select.add(opt);
+                return;
+            }
+
+            cryptos.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id; // L'ID technique (ex: usdt_trc20)
+                opt.text = c.name; // Le nom affiché (ex: USDT TRC20)
+                select.add(opt);
+            });
+        });
+        
+        // On relance les calculs pour mettre à jour l'affichage
+        calculateBuyAmount();
+        calculateSellAmount();
+    }
+
    // ================= GESTION DE L'ÉTAT DE CONNEXION (V2) =================
 const token = localStorage.getItem('atex-token');
 const authModal = document.getElementById('auth-modal');
@@ -143,6 +177,10 @@ if (token) {
             const response = await fetch('/api/config');
             if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
             state.config = await response.json();
+            
+            // On remplit les menus dynamiquement
+            populateCryptoSelects(state.config.availableCryptos);
+            
             initializeCalculators();
         } catch (error) {
             console.error("Impossible de charger la configuration:", error);
@@ -301,46 +339,70 @@ if (token) {
     // --- LOGIQUE DE CALCUL ---
     function calculateBuyAmount() {
         if (!buyAmountInput || !receiveAmountDisplay || !cryptoSelectBuy) return;
+        
+        // Récupération des infos dynamiques
+        const selectedId = cryptoSelectBuy.value;
+        const cryptoObj = getCryptoById(selectedId);
+        const symbol = cryptoObj ? cryptoObj.symbol : (selectedId ? selectedId.toUpperCase() : 'CRYPTO');
+
         if (!state.config.atexPrices) {
-            receiveAmountDisplay.textContent = `0.00 ${cryptoSelectBuy.value.toUpperCase()}`;
+            receiveAmountDisplay.textContent = `0.00 ${symbol}`;
             return;
         }
+
         const amountFCFA = parseFloat(buyAmountInput.value) || 0;
-        const crypto = cryptoSelectBuy.value;
-        const atexBuyPrice = state.config.atexPrices[crypto]?.buy;
+        const atexBuyPrice = state.config.atexPrices[selectedId]?.buy;
+
         if (!atexBuyPrice || amountFCFA <= 0) {
-            receiveAmountDisplay.textContent = `0.00 ${crypto.toUpperCase()}`;
+            receiveAmountDisplay.textContent = `0.00 ${symbol}`;
             return;
         }
+
         const finalCryptoAmount = amountFCFA / atexBuyPrice;
-        let precision = (crypto === 'btc') ? 8 : 4;
-        receiveAmountDisplay.textContent = `${finalCryptoAmount.toFixed(precision)} ${crypto.toUpperCase()}`;
+        let precision = (symbol === 'BTC' || symbol === 'ETH') ? 8 : 4;
+        
+        receiveAmountDisplay.textContent = `${finalCryptoAmount.toFixed(precision)} ${symbol}`;
+        
+        // Mise à jour de la transaction
         state.transaction.amountToSend = amountFCFA;
         state.transaction.amountToReceive = finalCryptoAmount;
         state.transaction.currencyFrom = 'FCFA';
-        state.transaction.currencyTo = crypto.toUpperCase();
+        state.transaction.currencyTo = symbol;
+        state.transaction.cryptoId = selectedId; // On garde l'ID technique pour le serveur
     }
     
     function calculateSellAmount() {
         if (!sellAmountInput || !receiveAmountSellDisplay || !cryptoSelectSell || !sellCurrencySymbol) return;
+        
+        const selectedId = cryptoSelectSell.value;
+        const cryptoObj = getCryptoById(selectedId);
+        const symbol = cryptoObj ? cryptoObj.symbol : (selectedId ? selectedId.toUpperCase() : 'CRYPTO');
+
+        // Mise à jour du symbole à côté de l'input
+        sellCurrencySymbol.textContent = symbol;
+
         if (!state.config.atexPrices) {
             receiveAmountSellDisplay.textContent = `0.00 FCFA`;
             return;
         }
+
         const amountCrypto = parseFloat(sellAmountInput.value) || 0;
-        const crypto = cryptoSelectSell.value;
-        const atexSellPrice = state.config.atexPrices[crypto]?.sell;
+        const atexSellPrice = state.config.atexPrices[selectedId]?.sell;
+
         if (!atexSellPrice || amountCrypto <= 0) {
             receiveAmountSellDisplay.textContent = `0.00 FCFA`;
             return;
         }
+
         const finalFCFAAmount = amountCrypto * atexSellPrice;
-        sellCurrencySymbol.textContent = crypto.toUpperCase();
+        
         receiveAmountSellDisplay.textContent = `${new Intl.NumberFormat('fr-FR').format(finalFCFAAmount.toFixed(0))} FCFA`;
+        
         state.transaction.amountToSend = amountCrypto;
         state.transaction.amountToReceive = finalFCFAAmount;
-        state.transaction.currencyFrom = crypto.toUpperCase();
+        state.transaction.currencyFrom = symbol;
         state.transaction.currencyTo = 'FCFA';
+        state.transaction.cryptoId = selectedId;
     }
 
     async function handleInitiateTransaction() {
