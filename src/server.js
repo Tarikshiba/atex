@@ -844,13 +844,13 @@ app.post('/api/user/save-wallets', verifyToken, async (req, res) => {
 });
 
 // ===============================================
-// ROUTE API POUR LA TRANSACTION DE LA MINI APP (V2)
+// ROUTE API POUR LA TRANSACTION DE LA MINI APP (V3 - CORRIGÉE)
 // ===============================================
 app.post('/api/miniapp/initiate-transaction', async (req, res) => {
     try {
         const txData = req.body;
 
-        // Validation simple
+        // Validation simple des données reçues
         if (!txData.type || !txData.amountToSend || !txData.phoneNumber) {
             return res.status(400).json({ message: "Données de transaction manquantes." });
         }
@@ -858,162 +858,158 @@ app.post('/api/miniapp/initiate-transaction', async (req, res) => {
             return res.status(400).json({ message: "L'adresse du portefeuille est requise pour un achat." });
         }
 
-        // 1. Sauvegarder la transaction complète dans Firestore
+        // 1. Sauvegarder la transaction dans la base de données
         const transactionToSave = {
             ...txData,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             status: 'pending',
             source: 'MiniApp'
         };
-       const newTransactionRef = await db.collection('transactions').add(transactionToSave);
-       const transactionId = newTransactionRef.id;
-        console.log("Nouvelle transaction (complète) depuis la Mini App enregistrée.");
+        const newTransactionRef = await db.collection('transactions').add(transactionToSave);
+        const transactionId = newTransactionRef.id;
 
-        // 2. Préparer et envoyer une notification enrichie à l'admin
+        // 2. Préparer la Notification pour les Admins
         let adminMessage;
-        // On échappe toutes les données variables AVANT de construire le message
-        const safeUsername = escapeMarkdownV2(txData.telegramUsername);
+        
+        // Sécurisation des textes pour éviter les bugs d'affichage Telegram (Markdown)
+        const safeUsername = escapeMarkdownV2(txData.telegramUsername || 'Anonyme');
         const safeTelegramId = escapeMarkdownV2(txData.telegramId);
-        const safeAmountToSend = escapeMarkdownV2(txData.amountToSend.toLocaleString('fr-FR'));
-        const safeAmountToReceive = escapeMarkdownV2(txData.amountToReceive.toFixed(6));
-        const safeAmountToReceiveSell = escapeMarkdownV2(Math.round(txData.amountToReceive).toLocaleString('fr-FR'));
         const safePaymentMethod = escapeMarkdownV2(txData.paymentMethod);
         const safePhoneNumber = escapeMarkdownV2(txData.phoneNumber);
         const safeWalletAddress = escapeMarkdownV2(txData.walletAddress);
         const safeCurrencyTo = escapeMarkdownV2(txData.currencyTo);
         const safeCurrencyFrom = escapeMarkdownV2(txData.currencyFrom);
-
-       const userInfo = `👤 *Client:* @${safeUsername} \\(ID: ${safeTelegramId}\\)`;
-        const separator = escapeMarkdownV2('--------------------------------------'); // <-- LA CORRECTION EST ICI
+        
+        const userInfo = `👤 *Client:* @${safeUsername} \\(ID: ${safeTelegramId}\\)`;
+        const separator = escapeMarkdownV2('--------------------------------------');
 
         if (txData.type === 'buy') {
+            // --- MESSAGE ADMIN : ACHAT ---
+            const valFrcfa = escapeMarkdownV2(txData.amountToSend.toLocaleString('fr-FR'));
+            const valCrypto = escapeMarkdownV2(txData.amountToReceive.toFixed(6));
+
             adminMessage = `
 *nouvelle COMMANDE D'ACHAT \\(Mini App\\)*
 ${separator}
 ${userInfo}
-*Montant Payé:* ${safeAmountToSend} FCFA
-*Crypto Achetée:* ${safeAmountToReceive} ${safeCurrencyTo}
+*Montant Payé:* ${valFrcfa} FCFA
+*Crypto Achetée:* ${valCrypto} ${safeCurrencyTo}
 *Opérateur MM:* ${safePaymentMethod}
 *N° de Téléphone:* ${safePhoneNumber}
 *Adresse Wallet:* \`${safeWalletAddress}\`
             `;
-        } else { // type 'sell'
+        } else { 
+            // --- MESSAGE ADMIN : VENTE (CORRIGÉ) ---
+            
+            // CORRECTION ICI : On affiche ce que le client envoie (La Crypto)
+            const valCrypto = escapeMarkdownV2(txData.amountToSend.toString()); 
+            // Et ce qu'il reçoit (Les FCFA)
+            const valFcfa = escapeMarkdownV2(Math.round(txData.amountToReceive).toLocaleString('fr-FR'));
+
              adminMessage = `
 *nouvelle COMMANDE DE VENTE \\(Mini App\\)*
 ${separator}
 ${userInfo}
-*Crypto Vendue:* ${safeAmountToReceive} ${safeCurrencyFrom}
-*Montant à Recevoir:* ${safeAmountToReceiveSell} FCFA
+*Crypto Vendue:* ${valCrypto} ${safeCurrencyFrom}
+*Montant à Recevoir:* ${valFcfa} FCFA
 *Opérateur MM:* ${safePaymentMethod}
 *N° de Réception:* ${safePhoneNumber}
             `;
         }
         
-       // On crée le clavier avec les boutons et on y insère l'ID de la transaction
-const options = {
-    parse_mode: 'MarkdownV2',
-    reply_markup: {
-        inline_keyboard: [
-            [
-                { text: "✅ Approuver", callback_data: `approve:${transactionId}` },
-                { text: "❌ Annuler", callback_data: `cancel:${transactionId}` }
-            ]
-        ]
-    }
-};
+        // Envoi du message dans le groupe Admin avec les boutons
+        const options = {
+            parse_mode: 'MarkdownV2',
+            reply_markup: {
+                inline_keyboard: [[
+                    { text: "✅ Approuver", callback_data: `approve:${transactionId}` },
+                    { text: "❌ Annuler", callback_data: `cancel:${transactionId}` }
+                ]]
+            }
+        };
+        await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, adminMessage, options);
 
-await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, adminMessage, options);
-// ...
-        console.log("Notification de transaction enrichie envoyée à l'admin.");
+        // 3. Réponse au Client (Message Bot + HTTP)
+        if (txData.type === 'buy') {
+            // --- CAS ACHAT (Inchangé) ---
+            const paymentInfo = PAYMENT_DETAILS[txData.paymentMethod];
+            if (paymentInfo) {
+                const payMsg = `
+Bonjour ${safeUsername}\\! 👋
+Votre demande d'achat a bien été reçue\\.
 
-        // 3. Envoyer la bonne réponse au frontend et les instructions de paiement
-if (txData.type === 'buy') {
-    // --- NOUVEAU BLOC : ENVOI DES INSTRUCTIONS DE PAIEMENT ---
-    const paymentInfo = PAYMENT_DETAILS[txData.paymentMethod];
-    if (paymentInfo) {
-        const userFirstName = escapeMarkdownV2(txData.telegramUsername || 'Client');
-// Lignes 931 à 946 dans server.js
-const paymentMessage = `
-Bonjour ${userFirstName}\\! 👋
-Votre demande d'achat a bien été reçue et est en cours de traitement\\.
-
-Pour finaliser, veuillez effectuer le paiement sur le numéro ci\\-dessous :
-
+Veuillez effectuer le paiement sur ce numéro :
 🧾 *Opérateur :* ${escapeMarkdownV2(paymentInfo.name)}
 📞 *Numéro :* \`${escapeMarkdownV2(paymentInfo.number)}\`
-_\\(Appuyez sur le numéro pour le copier facilement\\)_
 
-⚠️ *Important :* Si vous n'êtes pas au ${escapeMarkdownV2(paymentInfo.country)}, assurez\\-vous d'effectuer un **transfert international**\\.
+⚠️ *Important :* Si hors du ${escapeMarkdownV2(paymentInfo.country)}, faites un transfert international\\.
+🚨 *Envoyez la preuve au support :* @AtexlySupportBot
+                `;
+                try { await miniAppBot.sendMessage(txData.telegramId, payMsg, { parse_mode: 'MarkdownV2' }); } catch(e) { console.error(e); }
+            }
+            res.status(200).json({ message: "Commande reçue ! Instructions envoyées par message." });
 
-Une fois le paiement effectué, notre équipe validera la transaction et vous recevrez vos cryptomonnaies\\.
+        } else { 
+            // --- CAS VENTE (CORRIGÉ & DYNAMIQUE) ---
+            
+            // A. On récupère la liste de toutes les cryptos configurées
+            const cryptoListDoc = await db.collection('configuration').doc('crypto_list').get();
+            const cryptos = cryptoListDoc.exists ? (cryptoListDoc.data().list || []) : [];
+            
+            // B. On cherche la crypto exacte
+            // 1. On essaie avec l'ID précis (ex: 'usdt_bep20') reçu du frontend
+            let foundCrypto = null;
+            if (txData.cryptoId) {
+                foundCrypto = cryptos.find(c => c.id === txData.cryptoId);
+            }
+            
+            // 2. Si pas trouvé (ou ancien frontend), on cherche par symbole (ex: 'USDT')
+            if (!foundCrypto) {
+                console.log("Recherche par symbole (fallback)...");
+                foundCrypto = cryptos.find(c => c.symbol === txData.currencyFrom);
+            }
 
-🚨*Après avoir payé, merci d'envoyer la capture d'écran de la transaction à notre support client : @AtexlySupportBot*
-        `;
-        try {
-            await miniAppBot.sendMessage(txData.telegramId, paymentMessage, { parse_mode: 'MarkdownV2' });
-            console.log(`Instructions de paiement envoyées à ${txData.telegramId}.`);
-        } catch(e) {
-            console.error(`Erreur lors de l'envoi des instructions à ${txData.telegramId}:`, e.message);
-        }
-    }
-    // --- FIN DU NOUVEAU BLOC ---
-    res.status(200).json({ message: "Votre commande a été transmise ! Veuillez consulter vos messages pour les instructions de paiement." });
-} else { // type 'sell'
-    // --- NOUVELLE LOGIQUE VENTE DYNAMIQUE ---
-    
-    // 1. Récupérer la liste des cryptos pour trouver le bon wallet
-    const cryptoListDoc = await db.collection('configuration').doc('crypto_list').get();
-    const cryptos = cryptoListDoc.exists ? cryptoListDoc.data().list : [];
-    
-    // On cherche la crypto correspondante. 
-    // Note: Le frontend enverra 'USDT (TRC20)' ou l'ID si on le met à jour plus tard.
-    // Ici on fait une recherche souple pour trouver l'adresse.
-    const foundCrypto = cryptos.find(c => c.symbol === txData.currencyFrom || c.name === txData.currencyFrom) 
-                     || cryptos.find(c => txData.currencyFrom.includes(c.symbol));
-                     
-    // Adresse par défaut si introuvable (sécurité)
-    const targetWallet = foundCrypto ? foundCrypto.walletAddress : "Adresse non disponible. Contactez le support.";
-    const networkInfo = foundCrypto ? foundCrypto.network : "Réseau standard";
+            // C. On sécurise les données pour le message
+            const targetWallet = foundCrypto ? foundCrypto.walletAddress : "Adresse non disponible. Contactez le support.";
+            const networkInfo = foundCrypto ? foundCrypto.network : "Réseau standard";
 
-    const userFirstName = escapeMarkdownV2(txData.telegramUsername || 'Client');
-    const cryptoAmount = escapeMarkdownV2(txData.amountToSend.toString());
-    const cryptoSymbol = escapeMarkdownV2(txData.currencyFrom);
-    const receiveAmount = escapeMarkdownV2(Math.round(txData.amountToReceive).toLocaleString('fr-FR'));
-    const safeTargetWallet = escapeMarkdownV2(targetWallet);
-    const safeNetwork = escapeMarkdownV2(networkInfo);
+            const valCrypto = escapeMarkdownV2(txData.amountToSend.toString());
+            const valFcfa = escapeMarkdownV2(Math.round(txData.amountToReceive).toLocaleString('fr-FR'));
+            const safeTargetWallet = escapeMarkdownV2(targetWallet);
+            const safeNetwork = escapeMarkdownV2(networkInfo);
+            const symbol = escapeMarkdownV2(txData.currencyFrom);
 
-    const sellMessage = `
-Bonjour ${userFirstName}\\! 👋
-Votre demande de *vente* a bien été enregistrée\\.
+            // D. Construction du message pour le client
+            const sellMessage = `
+Bonjour ${safeUsername}\\! 👋
+Votre demande de *vente* est enregistrée\\.
 
-🔹 Vous vendez : *${cryptoAmount} ${cryptoSymbol}*
-🔹 Vous recevez : *${receiveAmount} FCFA*
+🔹 Vous vendez : *${valCrypto} ${symbol}*
+🔹 Vous recevez : *${valFcfa} FCFA*
 
-Pour finaliser, veuillez envoyer vos cryptos à l'adresse suivante :
+Envoyez vos cryptos à cette adresse :
 
-📥 *Adresse de dépôt ${cryptoSymbol} \\(${safeNetwork}\\) :*
+📥 *Adresse ${symbol} \\(${safeNetwork}\\) :*
 \`${safeTargetWallet}\`
-_\\(Appuyez sur l'adresse pour copier\\)_
+_\\(Appuyez pour copier\\)_
 
-⚠️ *Important :* Vérifiez bien le réseau *${safeNetwork}* avant d'envoyer\\.
+⚠️ *Important :* Utilisez bien le réseau *${safeNetwork}*\\.
+🚨 *Envoyez la preuve (hash) au support :* @AtexlySupportBot
+            `;
 
-🚨 *Une fois l'envoi effectué, envoyez la capture d'écran (hash) à notre support :* @AtexlySupportBot
-    `;
+            try {
+                await miniAppBot.sendMessage(txData.telegramId, sellMessage, { parse_mode: 'MarkdownV2' });
+                console.log(`Instructions de vente envoyées à ${txData.telegramId}`);
+            } catch(e) {
+                console.error(`Erreur envoi message vente :`, e.message);
+            }
 
-    try {
-        await miniAppBot.sendMessage(txData.telegramId, sellMessage, { parse_mode: 'MarkdownV2' });
-        console.log(`Instructions de vente envoyées à ${txData.telegramId}.`);
-    } catch(e) {
-        console.error(`Erreur envoi instructions vente à ${txData.telegramId}:`, e.message);
-    }
-
-    // On renvoie un message de succès simple, plus de redirection
-    res.status(200).json({ message: "Ordre de vente initié ! Consultez le bot pour l'adresse de dépôt." });
-}
+            res.status(200).json({ message: "Ordre initié ! L'adresse vous a été envoyée par message." });
+        }
 
     } catch (error) {
-        console.error("Erreur lors de l'initialisation de la transaction Mini App V2:", error);
-        res.status(500).json({ message: "Erreur interne du serveur." });
+        console.error("Erreur Transaction:", error);
+        res.status(500).json({ message: "Erreur serveur." });
     }
 });
 
