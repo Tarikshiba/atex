@@ -22,6 +22,47 @@
             <p class="text-gray-400">Chargement...</p>
         </div>
 
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
+            <h2 class="text-xl font-semibold mb-6 text-purple-400"><i class="fas fa-cogs"></i> Paramètres Généraux</h2>
+            
+            <form id="general-settings-form" class="space-y-6">
+                <div class="grid md:grid-cols-2 gap-8">
+                    
+                    <div class="bg-gray-900 p-4 rounded-lg border border-gray-600">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="font-bold text-red-400 text-lg">🔴 Mode Maintenance</label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="maintenance-toggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                            </label>
+                        </div>
+                        <p class="text-xs text-gray-400">Si activé, le Bot et la Mini App afficheront "Mise à jour en cours".</p>
+                    </div>
+
+                    <div class="bg-gray-900 p-4 rounded-lg border border-gray-600">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="font-bold text-blue-400 text-lg">🤝 Système Parrainage</label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="referral-toggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <p class="text-xs text-gray-400">Active ou désactive l'accès à la section "Gagner" pour les utilisateurs.</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Texte Promotionnel (Section Gagner)</label>
+                    <input type="text" id="referral-text-input" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-purple-500 text-white outline-none" placeholder="Ex: Nouvelle campagne : Gagnez 500 FCFA par ami !">
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded transition shadow-lg">
+                        Enregistrer les paramètres
+                    </button>
+                </div>
+            </form>
+        </div>
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-semibold text-yellow-400">Gestion des Cryptos & Wallets</h2>

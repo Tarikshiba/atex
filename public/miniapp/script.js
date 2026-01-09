@@ -281,26 +281,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function displayReferralInfo() {
+        const settings = window.atexSettings;
+        const noCampaignView = document.getElementById('no-campaign-view');
+        const activeCampaignView = document.getElementById('active-campaign-view');
+
+        // GESTION DE L'AFFICHAGE SELON LA CAMPAGNE
+        if (!settings || !settings.referral_active) {
+            if(noCampaignView) noCampaignView.classList.remove('hidden');
+            if(activeCampaignView) activeCampaignView.classList.add('hidden');
+            return;
+        }
+
+        // Si campagne active
+        if(noCampaignView) noCampaignView.classList.add('hidden');
+        if(activeCampaignView) activeCampaignView.classList.remove('hidden');
+        
+        const promoTextEl = document.getElementById('referral-promo-text');
+        if(promoTextEl) promoTextEl.textContent = settings.referral_text || "Invitez vos amis !";
+
         const user = tg.initDataUnsafe?.user;
         if (!user) return;
+
         try {
             const res = await fetch(`/api/miniapp/referral-info/${user.id}`);
             const info = await res.json();
             const botUsername = "AtexOfficielBot"; 
-            const shortAppName = "atexly"; // Vérifie que c'est bien ton shortname
-            referralLinkSpan.textContent = `https://t.me/${botUsername}/${shortAppName}?startapp=${info.referralCode}`;
+            const shortAppName = "atexly"; // Ton shortname configuré sur BotFather
+            
+            // --- CONSTRUCTION DU LIEN CAMPAGNE ---
+            // Le lien sera : t.me/Bot/app?startapp=CodeUser_IdCampagne
+            const campaignId = settings.referral_campaign_id || 'v1';
+            const fullCode = `${info.referralCode}_${campaignId}`;
+            
+            referralLinkSpan.textContent = `https://t.me/${botUsername}/${shortAppName}?startapp=${fullCode}`;
+            
+            // Mettre à jour les stats
             totalEarningsP.textContent = `${(info.referralEarnings || 0).toFixed(2)} USDT`;
             referralCountP.textContent = info.referralCount || 0;
             
-            // Listes
+            // Mettre à jour la liste (Fonction helper existante dans ton code)
             const renderList = (list, containerId, headerId) => {
                 const container = document.getElementById(containerId);
-                document.querySelector(`#${headerId} span`).textContent = `(${list.length})`;
-                container.innerHTML = list.length ? list.map(r => `<p class="referral-item">👤 ${r.name}</p>`).join('') : '<p class="referral-item-empty">Aucun filleul.</p>';
+                const headerSpan = document.querySelector(`#${headerId} span`);
+                if(headerSpan) headerSpan.textContent = `(${list.length})`;
+                if(container) container.innerHTML = list.length ? list.map(r => `<p class="referral-item">👤 ${r.name}</p>`).join('') : '<p class="referral-item-empty">Aucun filleul.</p>';
             };
-            renderList(info.activeReferrals, 'active-referrals-list', 'active-referrals-header');
-            renderList(info.inactiveReferrals, 'inactive-referrals-list', 'inactive-referrals-header');
-        } catch (e) { console.error(e); }
+            
+            if(info.activeReferrals) renderList(info.activeReferrals, 'active-referrals-list', 'active-referrals-header');
+
+        } catch (e) { console.error("Erreur affichage parrainage", e); }
     }
 
     // --- LOGIQUE RETRAIT (Inchangée) ---
@@ -346,6 +375,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INITIALISATION ---
     async function initializeApp() {
+        // --- 1. VÉRIFICATION GLOBALE (Maintenance & Config) ---
+        try {
+            const settingsRes = await fetch('/api/settings');
+            const settings = await settingsRes.json();
+
+            // SÉCURITÉ : Si maintenance active, on bloque tout
+            if (settings.maintenance_mode) {
+                document.getElementById('maintenance-screen').classList.remove('hidden');
+                document.getElementById('splash-screen').classList.add('hidden');
+                return; // ON ARRÊTE TOUT ICI
+            }
+
+            // On stocke la config pour l'utiliser ailleurs
+            window.atexSettings = settings;
+
+        } catch (e) {
+            console.error("Erreur chargement settings", e);
+        }
+        // --- FIN VÉRIFICATION ---
         await performUserCheckIn();
         await fetchPrices(); // Charge la config et construit le menu
         

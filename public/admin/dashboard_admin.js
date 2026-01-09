@@ -7,6 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const addCryptoForm = document.getElementById('add-crypto-form');
     const pricingForm = document.getElementById('pricing-form');
     const pricingFeedback = document.getElementById('pricing-feedback');
+    
+    // NOUVEAUX ÉLÉMENTS SETTINGS
+    const settingsForm = document.getElementById('general-settings-form');
+    const maintenanceToggle = document.getElementById('maintenance-toggle');
+    const referralToggle = document.getElementById('referral-toggle');
+    const referralTextInput = document.getElementById('referral-text-input');
 
     // Variable globale pour stocker les cryptos chargées
     let activeCryptos = [];
@@ -85,9 +91,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // SECTION 2 & 3 : GESTION DYNAMIQUE CRYPTOS & TAUX (NOUVEAU)
     // =========================================================
 
-    // A. Charger la configuration complète
+   // A. Charger la configuration complète
     async function loadConfiguration() {
         try {
+            // 0. CHARGER LES PARAMÈTRES GÉNÉRAUX (NOUVEAU)
+            const settingsRes = await fetch('/api/settings'); // Route publique (ou admin, ici publique suffit)
+            const settings = await settingsRes.json();
+            
+            // Appliquer aux inputs
+            maintenanceToggle.checked = settings.maintenance_mode || false;
+            referralToggle.checked = settings.referral_active !== false; // Actif par défaut si undefined
+            referralTextInput.value = settings.referral_text || '';
+
             // 1. Charger la liste des cryptos
             const cryptoRes = await fetch('/api/admin/cryptos', { headers: { 'Authorization': `Bearer ${token}` }});
             activeCryptos = await cryptoRes.json();
@@ -237,6 +252,51 @@ document.addEventListener('DOMContentLoaded', () => {
             pricingFeedback.className = 'mt-2 text-center text-sm font-medium text-red-500';
         }
     });
+
+    // G. SAUVEGARDER LES PARAMÈTRES GÉNÉRAUX
+    if(settingsForm) {
+        settingsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = settingsForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = "Sauvegarde...";
+            submitBtn.disabled = true;
+
+            // Logique intelligente : Si on active le parrainage, on demande si c'est une nouvelle saison
+            let startNewCampaign = false;
+            if (referralToggle.checked) {
+                 // Petite confirmation JS simple
+                 startNewCampaign = confirm("Voulez-vous lancer une NOUVELLE CAMPAGNE (Saison) ?\n\n- OK : Oui, générer de nouveaux liens (les anciens expirent).\n- ANNULER : Non, garder la campagne actuelle.");
+            }
+
+            const settingsData = {
+                maintenance_mode: maintenanceToggle.checked,
+                referral_active: referralToggle.checked,
+                referral_text: referralTextInput.value.trim(),
+                new_campaign: startNewCampaign // On envoie l'info au serveur
+            };
+
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(settingsData)
+                });
+
+                if (res.ok) {
+                    alert("✅ Paramètres mis à jour !");
+                } else {
+                    alert("❌ Erreur serveur.");
+                }
+            } catch (error) {
+                console.error(error);
+                alert("❌ Erreur connexion.");
+            } finally {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+    }
     
     // --- INITIALISATION ---
     fetchPendingTransactions();

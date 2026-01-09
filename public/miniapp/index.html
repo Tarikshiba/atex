@@ -8,6 +8,11 @@
 </head>
 <body>
     <div id="app">
+        <div id="maintenance-screen" class="hidden fixed inset-0 bg-gray-900 z-50 flex flex-col justify-center items-center text-center p-6">
+            <div class="text-6xl mb-4">🚧</div>
+            <h1 class="text-2xl font-bold text-white mb-2">Maintenance en cours</h1>
+            <p class="text-gray-400">ATEXLY sera disponible sous peu. Nous faisons une mise à jour pour vous !</p>
+        </div>
         <div id="splash-screen">
             <h1>ATEXLY</h1>
             <p>Bienvenue</p>
@@ -56,41 +61,46 @@
                 </div>
             </section>
 
-            <section id="earn" class="page">
-                <h2>Invitez et Gagnez</h2>
-                <div class="referral-card">
-                    <h4>Votre lien de parrainage</h4>
-                    <p>Partagez ce lien avec vos amis. Vous gagnez **25 FCFA** en USDT pour chaque ami qui devient actif !</p>
-                    <div class="referral-link-box">
-                        <span id="referral-link">Chargement...</span>
-                        <button id="copy-referral-link">Copier</button>
-                    </div>
+           <section id="earn" class="page">
+                <h2>Espace Parrainage</h2>
+                
+                <div id="no-campaign-view" class="hidden text-center mt-10">
+                    <div class="text-5xl mb-4">💤</div>
+                    <h3 class="text-xl text-gray-300 font-bold">Aucune campagne active</h3>
+                    <p class="text-gray-500 mt-2">Revenez bientôt pour la prochaine saison !</p>
                 </div>
-    <div class="referral-stats">
-    <div class="stat-card">
-        <h4>Gains Totaux</h4>
-        <p id="total-earnings">0.00 USDT</p>
-    </div>
-    <div class="stat-card">
-        <h4>Amis Invités</h4>
-        <p id="referral-count">0</p>
-    </div>
-</div>
 
-<div class="referral-details">
-    <div class="referral-list-container">
-        <h4 id="active-referrals-header">✅ Filleuls Actifs <span>(0)</span></h4>
-        <div id="active-referrals-list" class="referral-list">
-            </div>
-    </div>
-    <div class="referral-list-container">
-        <h4 id="inactive-referrals-header">⏳ Filleuls en attente <span>(0)</span></h4>
-        <div id="inactive-referrals-list" class="referral-list">
-            </div>
-    </div>
-</div>
-<p class="referral-note">Un ami devient "actif" après 1 transaction ou en invitant 2 personnes.</p>
-                <button id="show-withdrawal-btn" class="submit-btn">Demander un retrait</button>
+                <div id="active-campaign-view">
+                    <div class="referral-card">
+                        <h4>Votre lien de la campagne</h4>
+                        <p id="referral-promo-text" class="text-sm text-green-400 mb-2 font-bold"></p>
+                        <div class="referral-link-box">
+                            <span id="referral-link">Chargement...</span>
+                            <button id="copy-referral-link">Copier</button>
+                        </div>
+                         <p class="text-xs text-gray-500 mt-2 text-center">⚠️ Ce lien expire à la fin de la campagne.</p>
+                    </div>
+
+                    <div class="referral-stats">
+                        <div class="stat-card">
+                            <h4>Gains Totaux</h4>
+                            <p id="total-earnings">0.00 USDT</p>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Amis Invités</h4>
+                            <p id="referral-count">0</p>
+                        </div>
+                    </div>
+
+                    <div class="referral-details">
+                        <div class="referral-list-container">
+                            <h4 id="active-referrals-header">✅ Filleuls Actifs <span>(0)</span></h4>
+                            <div id="active-referrals-list" class="referral-list"></div>
+                        </div>
+                        </div>
+                    
+                    <button id="show-withdrawal-btn" class="submit-btn mt-4">Demander un retrait</button>
+                </div>
             </section>
 
             <section id="profile" class="page">

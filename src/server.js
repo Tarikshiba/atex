@@ -116,53 +116,88 @@ console.log('Bot de la Mini App démarré et en écoute...');
 // --- LOGIQUE DU BOT TELEGRAM & MINI APP ---
 
 miniAppBot.onText(/\/start(.*)/, async (msg, match) => {
+    // 1. VÉRIFICATION MAINTENANCE BOT
+    const configDoc = await db.collection('configuration').doc('general').get();
+    if (configDoc.exists && configDoc.data().maintenance_mode) {
+         // On vérifie si c'est un admin (bypass maintenance)
+         const isAdmin = (process.env.TELEGRAM_ADMIN_IDS || '').includes(msg.from.id.toString());
+         if (!isAdmin) {
+             return miniAppBot.sendMessage(msg.chat.id, "🚧 **ATEX est en maintenance.**\n\nNous déployons une mise à jour pour améliorer nos services. Revenez dans quelques instants !", { parse_mode: 'Markdown' });
+         }
+    }
     const chatId = msg.chat.id;
     const telegramId = msg.from.id;
     // On nettoie le code de parrainage s'il existe
-    const referredByCode = match[1] ? match[1].trim().replace(' ', '') : null;
+    // 1. ANALYSE DU CODE PARRAINAGE (Format: CodeParrain_IdCampagne)
+    const rawParam = match[1] ? match[1].trim() : '';
+    // On sépare le code parrain de l'ID campagne (séparateur "_")
+    // Ex: "AbCdEf_campagne_v2" -> parrain="AbCdEf", campaign="campagne_v2"
+    let [referralCode, campaignId] = rawParam.split('_');
+    
+    // Si pas de campagne dans le lien, on met null (ancien lien)
+    if (!campaignId && rawParam) referralCode = rawParam; 
 
     try {
         const usersRef = db.collection('users');
         const snapshot = await usersRef.where('telegramId', '==', telegramId).limit(1).get();
 
         if (snapshot.empty) {
-            // Nouvel utilisateur : on le crée
-            const newReferralCode = nanoid(8); // Génère un code unique (ex: 'aB3xZ_1p')
+            // --- NOUVEL UTILISATEUR ---
+            const newReferralCode = nanoid(8); 
             
+            // Validation de la campagne
+            let validReferredBy = null;
+
+            if (referralCode && campaignId) {
+                // On récupère la config ACTUELLE pour comparer
+                // Note: configDoc a été récupéré plus haut pour la maintenance
+                const currentConfig = configDoc.exists ? configDoc.data() : {};
+                
+                // On valide seulement si :
+                // 1. Le parrainage est globalement ACTIF
+                // 2. L'ID de campagne du lien correspond à la campagne ACTUELLE du serveur
+                if (currentConfig.referral_active && currentConfig.referral_campaign_id === campaignId) {
+                    validReferredBy = referralCode;
+                } else {
+                    console.log(`Parrainage ignoré : Campagne invalide (Lien: ${campaignId}, Serveur: ${currentConfig.referral_campaign_id})`);
+                }
+            } else if (referralCode && !campaignId) {
+                 // Gestion des anciens liens sans campagne (optionnel: accepter ou refuser)
+                 // Ici on refuse pour forcer le nouveau système
+                 console.log("Ancien lien de parrainage ignoré.");
+            }
+
             const newUser = {
                 telegramId: telegramId,
                 telegramUsername: msg.from.username || '',
                 referralCode: newReferralCode,
-                referredBy: referredByCode || null, // On stocke le code du parrain
+                referredBy: validReferredBy, // On stocke seulement si valide
                 referralCount: 0,
                 isReferralActive: false,
-                referralEarnings: 0, // Solde en USDT
+                referralEarnings: 0,
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
             };
 
             await usersRef.add(newUser);
-            console.log(`Nouvel utilisateur Telegram créé : ${telegramId} avec le code ${newReferralCode}`);
+            console.log(`Nouvel utilisateur créé : ${telegramId} (Parrain: ${validReferredBy || 'Aucun'})`);
 
-            // --- BLOC AJOUTÉ CI-DESSOUS ---
-            // Si l'utilisateur a été parrainé, on met à jour le compteur de son parrain.
-            if (referredByCode) {
-                const referrerSnapshot = await usersRef.where('referralCode', '==', referredByCode).limit(1).get();
+            // Mise à jour du compteur du parrain SI valide
+            if (validReferredBy) {
+                const referrerSnapshot = await usersRef.where('referralCode', '==', validReferredBy).limit(1).get();
                 if (!referrerSnapshot.empty) {
                     const referrerDoc = referrerSnapshot.docs[0];
                     await referrerDoc.ref.update({
                         referralCount: admin.firestore.FieldValue.increment(1)
                     });
-                    console.log(`Compteur de parrainage mis à jour pour le code ${referredByCode}`);
                 }
             }
 
         } else {
-            // Utilisateur existant
-            console.log(`Utilisateur Telegram existant trouvé : ${telegramId}`);
+            console.log(`Utilisateur existant : ${telegramId}`);
         }
         
-        // On envoie le message avec le bouton pour lancer la Mini App
-        const webAppUrl = process.env.MINI_APP_URL; // Ex: https://atexly.com/miniapp
+        // Envoi du message de bienvenue
+        const webAppUrl = process.env.MINI_APP_URL; 
         miniAppBot.sendMessage(chatId, "👋 Bienvenue sur ATEX ! Cliquez ci-dessous pour démarrer.", {
             reply_markup: {
                 inline_keyboard: [
@@ -172,8 +207,8 @@ miniAppBot.onText(/\/start(.*)/, async (msg, match) => {
         });
 
     } catch (error) {
-        console.error("Erreur dans le handler /start du bot:", error);
-        miniAppBot.sendMessage(chatId, "Oups ! Une erreur est survenue. Veuillez réessayer.");
+        console.error("Erreur /start:", error);
+        miniAppBot.sendMessage(chatId, "Erreur serveur. Réessayez plus tard.");
     }
 });
 
@@ -575,6 +610,73 @@ app.put('/api/admin/transactions/:id/status', verifyAdminToken, async (req, res)
 // NOUVELLES ROUTES ADMIN : GESTION DES CRYPTOS & WALLETS (DYNAMIQUE)
 // ==================================================================
 
+// --- ROUTES POUR LES PARAMÈTRES GÉNÉRAUX & MIDDLEWARE MAINTENANCE ---
+
+// Middleware de Maintenance
+const checkMaintenance = async (req, res, next) => {
+    // On laisse passer les admins et les routes de config/settings
+    if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/settings')) {
+        return next();
+    }
+    
+    try {
+        const doc = await db.collection('configuration').doc('general').get();
+        if (doc.exists && doc.data().maintenance_mode) {
+            return res.status(503).json({ 
+                message: "ATEX est actuellement en maintenance pour mise à jour. Revenez vite !",
+                maintenance: true 
+            });
+        }
+        next();
+    } catch (error) {
+        next(); // En cas d'erreur DB, on laisse passer par défaut (fail-open)
+    }
+};
+
+// Appliquer le middleware à TOUTES les routes API (sauf settings/admin géré au dessus)
+app.use('/api', checkMaintenance);
+
+// 1. Récupérer les paramètres globaux (Route Publique)
+app.get('/api/settings', async (req, res) => {
+    try {
+        const doc = await db.collection('configuration').doc('general').get();
+        const defaults = { 
+            maintenance_mode: false, 
+            referral_active: true, 
+            referral_campaign_id: 'campagne_v1', // ID par défaut
+            referral_text: "Gagnez 25 FCFA par ami invité !" 
+        };
+        res.status(200).json(doc.exists ? { ...defaults, ...doc.data() } : defaults);
+    } catch (error) {
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// 2. Mettre à jour les paramètres (Route Admin)
+app.post('/api/admin/settings', verifyAdminToken, async (req, res) => {
+    try {
+        const { maintenance_mode, referral_active, referral_text, new_campaign } = req.body;
+        
+        const updateData = { 
+            maintenance_mode, 
+            referral_active, 
+            referral_text 
+        };
+
+        // Si on demande une nouvelle campagne, on génère un nouvel ID unique
+        if (new_campaign) {
+            updateData.referral_campaign_id = `campagne_${nanoid(6)}`;
+            // Optionnel : On pourrait archiver les stats ici si tu veux
+        }
+
+        await db.collection('configuration').doc('general').set(updateData, { merge: true });
+        res.status(200).json({ message: "Paramètres mis à jour.", campaignId: updateData.referral_campaign_id });
+    } catch (error) {
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// --- FIN ROUTES PARAMÈTRES ---
 // 1. Récupérer la configuration complète des cryptos
 app.get('/api/admin/cryptos', verifyAdminToken, async (req, res) => {
     try {
