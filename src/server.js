@@ -633,20 +633,6 @@ const checkMaintenance = async (req, res, next) => {
         next(); // En cas d'erreur DB, on laisse passer par défaut (fail-open)
     }
 };
-    
-    try {
-        const doc = await db.collection('configuration').doc('general').get();
-        if (doc.exists && doc.data().maintenance_mode) {
-            return res.status(503).json({ 
-                message: "ATEX est actuellement en maintenance pour mise à jour. Revenez vite !",
-                maintenance: true 
-            });
-        }
-        next();
-    } catch (error) {
-        next(); // En cas d'erreur DB, on laisse passer par défaut (fail-open)
-    }
-};
 
 // Appliquer le middleware à TOUTES les routes API (sauf settings/admin géré au dessus)
 app.use('/api', checkMaintenance);
