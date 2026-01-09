@@ -614,10 +614,25 @@ app.put('/api/admin/transactions/:id/status', verifyAdminToken, async (req, res)
 
 // Middleware de Maintenance
 const checkMaintenance = async (req, res, next) => {
-    // On laisse passer les admins et les routes de config/settings
-    if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/settings')) {
+    // CORRECTION : On utilise originalUrl pour avoir le chemin complet (/api/admin...)
+    // On laisse passer les admins, les settings et les webhooks (si besoin)
+    if (req.originalUrl.startsWith('/api/admin') || req.originalUrl.startsWith('/api/settings')) {
         return next();
     }
+    
+    try {
+        const doc = await db.collection('configuration').doc('general').get();
+        if (doc.exists && doc.data().maintenance_mode) {
+            return res.status(503).json({ 
+                message: "ATEX est actuellement en maintenance pour mise à jour. Revenez vite !",
+                maintenance: true 
+            });
+        }
+        next();
+    } catch (error) {
+        next(); // En cas d'erreur DB, on laisse passer par défaut (fail-open)
+    }
+};
     
     try {
         const doc = await db.collection('configuration').doc('general').get();
