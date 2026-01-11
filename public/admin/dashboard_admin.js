@@ -185,7 +185,11 @@ document.addEventListener('DOMContentLoaded', () => {
             network: document.getElementById('new-network').value.trim(),
             walletAddress: document.getElementById('new-wallet').value.trim(),
             // Si la clé marché est vide, on utilise le symbole en minuscule (ex: usdt)
-            marketKey: (document.getElementById('new-market-key').value.trim() || symbol).toLowerCase()
+            marketKey: (document.getElementById('new-market-key').value.trim() || symbol).toLowerCase(),
+            
+            // NOUVEAU : LIMITES
+            minBuy: parseFloat(document.getElementById('new-min-buy').value) || 0,
+            minSell: parseFloat(document.getElementById('new-min-sell').value) || 0
         };
 
         try {

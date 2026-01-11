@@ -80,10 +80,55 @@ document.addEventListener('DOMContentLoaded', () => {
             resultCurrency = 'FCFA';
         }
 
-        // Affichage (6 décimales pour BTC/ETH, 2 pour les autres)
+       // Affichage (6 décimales pour BTC/ETH, 2 pour les autres)
         const symbol = getCryptoSymbol(selectedId).toLowerCase();
         const decimals = (symbol === 'btc' || symbol === 'eth') ? 6 : 2;
         amountToReceiveDisplay.textContent = `${result.toFixed(decimals)} ${resultCurrency}`;
+
+        // --- NOUVEAU : VALIDATION VISUELLE DES LIMITES ---
+        validateLimits(amount, selectedId);
+    }
+
+    function validateLimits(amount, cryptoId) {
+        const crypto = availableCryptosList.find(c => c.id === cryptoId);
+        if (!crypto) return;
+
+        let isValid = true;
+        let errorMessage = "";
+
+        // Reset UI
+        amountToSendInput.classList.remove('border-red-500', 'text-red-500');
+        amountLabel.classList.remove('text-red-500');
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = "1";
+        
+        // Nettoyage ancien message d'erreur
+        const existingError = document.getElementById('limit-error-msg');
+        if (existingError) existingError.remove();
+
+        // Vérification
+        if (currentMode === 'buy' && crypto.minBuy > 0 && amount < crypto.minBuy) {
+            isValid = false;
+            errorMessage = `Min: ${crypto.minBuy.toLocaleString()} FCFA`;
+        } else if (currentMode === 'sell' && crypto.minSell > 0 && amount < crypto.minSell) {
+            isValid = false;
+            errorMessage = `Min: ${crypto.minSell} ${crypto.symbol}`;
+        }
+
+        // Application Erreur
+        if (!isValid && amount > 0) { // On n'affiche l'erreur que si l'utilisateur a commencé à taper
+            amountToSendInput.classList.add('border-red-500', 'text-red-500');
+            amountLabel.classList.add('text-red-500');
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = "0.5";
+
+            // Ajout message sous l'input
+            const errorP = document.createElement('p');
+            errorP.id = 'limit-error-msg';
+            errorP.className = 'text-red-500 text-xs mt-1 font-bold';
+            errorP.innerText = `⚠️ ${errorMessage}`;
+            amountToSendInput.parentNode.appendChild(errorP);
+        }
     }
 
     // --- RÉCUPÉRATION DE LA CONFIG (PRIX + LISTE CRYPTOS) ---

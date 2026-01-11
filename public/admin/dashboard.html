@@ -135,6 +135,17 @@
                     <label for="new-market-key" class="text-xs text-gray-500 mb-1 block">Clé CoinMarketCap (ex: btc, eth, usdt)</label>
                     <input type="text" id="new-market-key" placeholder="Laisser vide si identique au symbole" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none text-sm">
                 </div>
+
+                <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-700">
+                    <div>
+                        <label for="new-min-buy" class="text-xs text-gray-400 mb-1 block">Min. Achat (FCFA)</label>
+                        <input type="number" id="new-min-buy" placeholder="Ex: 5000" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none text-sm">
+                    </div>
+                    <div>
+                        <label for="new-min-sell" class="text-xs text-gray-400 mb-1 block">Min. Vente (Crypto)</label>
+                        <input type="number" step="any" id="new-min-sell" placeholder="Ex: 0.001" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none text-sm">
+                    </div>
+                </div>
                 
                 <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-700">
                     <button type="button" onclick="document.getElementById('add-crypto-modal').classList.add('hidden')" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-white transition">Annuler</button>

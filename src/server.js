@@ -961,6 +961,30 @@ app.post('/api/miniapp/initiate-transaction', async (req, res) => {
             return res.status(400).json({ message: "L'adresse du portefeuille est requise pour un achat." });
         }
 
+        // --- NOUVEAU : VÉRIFICATION DES LIMITES PAR CRYPTO ---
+        if (txData.cryptoId) {
+            const configDoc = await db.collection('configuration').doc('crypto_list').get();
+            const cryptos = configDoc.exists ? (configDoc.data().list || []) : [];
+            const selectedCrypto = cryptos.find(c => c.id === txData.cryptoId);
+
+            if (selectedCrypto) {
+                // Vérification Achat (Montant en FCFA)
+                if (txData.type === 'buy' && selectedCrypto.minBuy > 0) {
+                    if (txData.amountToSend < selectedCrypto.minBuy) {
+                        return res.status(400).json({ message: `Le minimum d'achat pour ${selectedCrypto.name} est de ${selectedCrypto.minBuy.toLocaleString('fr-FR')} FCFA.` });
+                    }
+                }
+                // Vérification Vente (Montant en Crypto)
+                // Note: En vente, amountToSend est le montant en crypto envoyé par le client
+                if (txData.type === 'sell' && selectedCrypto.minSell > 0) {
+                    if (txData.amountToSend < selectedCrypto.minSell) {
+                        return res.status(400).json({ message: `Le minimum de vente pour ${selectedCrypto.name} est de ${selectedCrypto.minSell} ${selectedCrypto.symbol}.` });
+                    }
+                }
+            }
+        }
+        // --- FIN VÉRIFICATION ---
+
         // 1. Sauvegarder la transaction
         const transactionToSave = {
             ...txData,
