@@ -457,6 +457,59 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ===============================================
+    // SECTION 5 : GESTION DU BROADCAST (PHASE 4)
+    // ===============================================
+    const broadcastForm = document.getElementById('broadcast-form');
+    const broadcastFeedback = document.getElementById('broadcast-feedback');
+    const broadcastBtn = document.getElementById('broadcast-submit-btn');
+
+    if (broadcastForm) {
+        broadcastForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Confirmation de sécurité
+            if (!confirm("⚠️ ATTENTION : Vous allez envoyer ce message à TOUS les utilisateurs inscrits.\n\nConfirmer l'envoi ?")) return;
+
+            // UI Loading
+            const originalText = broadcastBtn.innerHTML;
+            broadcastBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi en cours...';
+            broadcastBtn.disabled = true;
+            broadcastFeedback.textContent = '';
+
+            const payload = {
+                message: document.getElementById('broadcast-message').value,
+                imageUrl: document.getElementById('broadcast-image').value || null,
+                buttonText: document.getElementById('broadcast-btn-text').value || null,
+                buttonUrl: document.getElementById('broadcast-btn-url').value || null
+            };
+
+            try {
+                const res = await fetch('/api/admin/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    broadcastFeedback.className = 'text-green-500 text-center text-sm font-bold mt-2';
+                    broadcastFeedback.textContent = `✅ ${data.message}`;
+                    broadcastForm.reset();
+                } else {
+                    broadcastFeedback.className = 'text-red-500 text-center text-sm font-bold mt-2';
+                    broadcastFeedback.textContent = `❌ Erreur : ${data.message}`;
+                }
+            } catch (error) {
+                broadcastFeedback.textContent = "❌ Erreur de connexion.";
+            } finally {
+                broadcastBtn.innerHTML = originalText;
+                broadcastBtn.disabled = false;
+            }
+        });
+    }
+    
     // --- INITIALISATION ---
     fetchPendingTransactions();
     fetchWithdrawals();
