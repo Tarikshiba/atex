@@ -1896,10 +1896,38 @@ _Notre équipe est disponible 7j/7._
             });
         }
 
-        // 4. Transférer le message du client
-        await supportBot.forwardMessage(supportGroupId, userId, msg.message_id, {
+        // 4. Transférer le message du client (Avec système d'Auto-Réparation)
+        const forwardedMsg = await supportBot.forwardMessage(supportGroupId, userId, msg.message_id, {
             message_thread_id: supportTopicId
         });
+
+        // --- SELF-HEALING: DÉTECTION SUJET SUPPRIMÉ ---
+        // Si on visait un sujet précis mais que le message est arrivé sans ID de sujet (donc dans Général)
+        if (supportTopicId && !forwardedMsg.message_thread_id) {
+            console.log(`[Support] Le sujet ${supportTopicId} a été supprimé manuellement. Régénération...`);
+            
+            // A. Nettoyage : On supprime le message perdu dans Général
+            try { await supportBot.deleteMessage(supportGroupId, forwardedMsg.message_id); } catch(e) {}
+
+            // B. Reset : On crée un tout nouveau topic
+            const newTopicName = `${msg.from.first_name || 'Client'} (${userId})`;
+            const newTopic = await supportBot.createForumTopic(supportGroupId, newTopicName);
+            const newTopicId = newTopic.message_thread_id;
+
+            // C. Sauvegarde : On met à jour la base de données avec le nouvel ID
+            if (userDoc) {
+                await userDoc.ref.update({ supportTopicId: newTopicId });
+            }
+
+            // D. Info : On prévient l'admin dans le nouveau ticket
+            await supportBot.sendMessage(supportGroupId, `♻️ **TICKET RESTAURÉ**\n(L'ancien sujet a été supprimé)\n👤 ${username}`, { message_thread_id: newTopicId });
+
+            // E. Transfert : On remet le message du client au bon endroit
+            await supportBot.forwardMessage(supportGroupId, userId, msg.message_id, {
+                message_thread_id: newTopicId
+            });
+        }
+        // --- FIN SELF-HEALING ---
 
     } catch (error) {
         console.error("Erreur ATEX Desk:", error.message);
