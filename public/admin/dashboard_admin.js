@@ -88,20 +88,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // =========================================================
-    // SECTION 2 & 3 : GESTION DYNAMIQUE CRYPTOS & TAUX (NOUVEAU)
+    // SECTION 2 & 3 : GESTION DYNAMIQUE CRYPTOS & TAUX
     // =========================================================
 
    // A. Charger la configuration complète
     async function loadConfiguration() {
         try {
-            // 0. CHARGER LES PARAMÈTRES GÉNÉRAUX (NOUVEAU)
-            const settingsRes = await fetch('/api/settings'); // Route publique (ou admin, ici publique suffit)
+            // 0. CHARGER LES PARAMÈTRES GÉNÉRAUX
+            const settingsRes = await fetch('/api/settings'); // Route publique
             const settings = await settingsRes.json();
             
             // Appliquer aux inputs
-            maintenanceToggle.checked = settings.maintenance_mode || false;
-            referralToggle.checked = settings.referral_active !== false; // Actif par défaut si undefined
-            referralTextInput.value = settings.referral_text || '';
+            if(maintenanceToggle) maintenanceToggle.checked = settings.maintenance_mode || false;
+            if(referralToggle) referralToggle.checked = settings.referral_active !== false;
+            if(referralTextInput) referralTextInput.value = settings.referral_text || '';
 
             // 1. Charger la liste des cryptos
             const cryptoRes = await fetch('/api/admin/cryptos', { headers: { 'Authorization': `Bearer ${token}` }});
@@ -146,21 +146,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FONCTIONS MODALES (GLOBALES) ---
     
-    // 1. Ouvrir en mode AJOUT
     window.openAddModal = () => {
-        document.getElementById('add-crypto-form').reset(); // Vider le formulaire
+        document.getElementById('add-crypto-form').reset();
         document.getElementById('modal-title').textContent = "Ajouter une Crypto";
-        document.getElementById('new-id').disabled = false; // L'ID est modifiable
-        document.getElementById('new-id').classList.remove('bg-gray-700', 'cursor-not-allowed');
+        const idInput = document.getElementById('new-id');
+        idInput.disabled = false;
+        idInput.classList.remove('bg-gray-700', 'cursor-not-allowed');
         document.getElementById('add-crypto-modal').classList.remove('hidden');
     };
 
-    // 2. Ouvrir en mode MODIFICATION
     window.editCrypto = (id) => {
         const crypto = activeCryptos.find(c => c.id === id);
         if (!crypto) return;
 
-        // Remplir les champs
         document.getElementById('new-id').value = crypto.id;
         document.getElementById('new-name').value = crypto.name;
         document.getElementById('new-symbol').value = crypto.symbol;
@@ -170,19 +168,15 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('new-min-buy').value = crypto.minBuy || '';
         document.getElementById('new-min-sell').value = crypto.minSell || '';
 
-        // UI : Bloquer l'ID (car c'est la clé primaire, on ne peut pas la changer sinon ça crée un doublon)
         const idInput = document.getElementById('new-id');
         idInput.disabled = true; 
         idInput.classList.add('bg-gray-700', 'cursor-not-allowed');
 
-        // Changer le titre
         document.getElementById('modal-title').textContent = `Modifier ${crypto.name}`;
-        
-        // Afficher
         document.getElementById('add-crypto-modal').classList.remove('hidden');
     };
 
-    // C. Afficher le formulaire des taux (généré dynamiquement)
+    // C. Afficher le formulaire des taux
     function renderRatesForm(currentRates) {
         if (activeCryptos.length === 0) {
             ratesContainer.innerHTML = '<p class="text-gray-500 col-span-3 text-center">Ajoutez une crypto pour configurer ses taux.</p>';
@@ -215,8 +209,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // D. Ajouter une Crypto (Appel API)
     addCryptoForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
-        // On récupère les valeurs
         const symbol = document.getElementById('new-symbol').value.toUpperCase();
         
         const newCrypto = {
@@ -225,10 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
             symbol: symbol,
             network: document.getElementById('new-network').value.trim(),
             walletAddress: document.getElementById('new-wallet').value.trim(),
-            // Si la clé marché est vide, on utilise le symbole en minuscule (ex: usdt)
             marketKey: (document.getElementById('new-market-key').value.trim() || symbol).toLowerCase(),
-            
-            // NOUVEAU : LIMITES
             minBuy: parseFloat(document.getElementById('new-min-buy').value) || 0,
             minSell: parseFloat(document.getElementById('new-min-sell').value) || 0
         };
@@ -243,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(res.ok) {
                 document.getElementById('add-crypto-modal').classList.add('hidden');
                 addCryptoForm.reset();
-                loadConfiguration(); // Recharger la vue
+                loadConfiguration();
             } else {
                 alert("Erreur lors de l'ajout. Vérifiez les champs.");
             }
@@ -252,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // E. Supprimer une Crypto (Appel API) - Fonction attachée à window pour être accessible dans le HTML
+    // E. Supprimer une Crypto (Appel API)
     window.deleteCrypto = async (id) => {
         if(!confirm(`Supprimer la crypto ${id} ? \nAttention : Cela supprimera aussi ses taux configurés.`)) return;
         try {
@@ -268,11 +257,6 @@ document.addEventListener('DOMContentLoaded', () => {
         pricingFeedback.className = 'mt-2 text-center text-sm font-medium text-yellow-400';
         
         const formData = new FormData(e.target);
-        const rates = {};
-        
-        // On reconstruit l'objet à plat
-        // Le serveur attend { "usdt-buy-rate": 650, ... } mais l'ancien code reconstruisait un objet.
-        // Adapté au nouveau server.js qui attend un objet plat dans req.body pour la boucle
         const flatRates = {};
         for (const [key, value] of formData.entries()) {
             flatRates[key] = value;
@@ -307,10 +291,8 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.textContent = "Sauvegarde...";
             submitBtn.disabled = true;
 
-            // Logique intelligente : Si on active le parrainage, on demande si c'est une nouvelle saison
             let startNewCampaign = false;
             if (referralToggle.checked) {
-                 // Petite confirmation JS simple
                  startNewCampaign = confirm("Voulez-vous lancer une NOUVELLE CAMPAGNE (Saison) ?\n\n- OK : Oui, générer de nouveaux liens (les anciens expirent).\n- ANNULER : Non, garder la campagne actuelle.");
             }
 
@@ -318,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 maintenance_mode: maintenanceToggle.checked,
                 referral_active: referralToggle.checked,
                 referral_text: referralTextInput.value.trim(),
-                new_campaign: startNewCampaign // On envoie l'info au serveur
+                new_campaign: startNewCampaign
             };
 
             try {
@@ -359,13 +341,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const withdrawals = await res.json();
             renderWithdrawals(withdrawals);
         } catch (e) {
-            withdrawalsContainer.innerHTML = '<p class="text-red-500">Erreur chargement retraits.</p>';
+            if(withdrawalsContainer) withdrawalsContainer.innerHTML = '<p class="text-red-500">Erreur chargement retraits.</p>';
         }
     };
 
     const renderWithdrawals = (list) => {
         if (!list || list.length === 0) {
-            withdrawalsContainer.innerHTML = '<p class="text-gray-500 italic">Aucune demande de retrait en attente.</p>';
+            if(withdrawalsContainer) withdrawalsContainer.innerHTML = '<p class="text-gray-500 italic">Aucune demande de retrait en attente.</p>';
             return;
         }
         
@@ -401,16 +383,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     };
 
-    // Fonctions Globales pour les boutons HTML
     window.openApproveModal = (id) => {
         approveIdInput.value = id;
-        proofInput.value = ''; // Reset
+        proofInput.value = '';
         approveModal.classList.remove('hidden');
     };
 
     window.rejectWithdrawal = async (id) => {
         const reason = prompt("Raison du rejet (sera envoyée à l'utilisateur) :", "Données incorrectes");
-        if (reason === null) return; // Annulé
+        if (reason === null) return;
 
         try {
             const res = await fetch(`/api/admin/withdrawals/${id}/reject`, {
@@ -427,43 +408,44 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { alert("Erreur connexion"); }
     };
 
-    // Validation via Modale
-    confirmApproveBtn.addEventListener('click', async () => {
-        const id = approveIdInput.value;
-        const proof = proofInput.value.trim();
-        
-        if(!proof) return alert("Veuillez entrer une preuve de paiement (Hash ou Réf).");
-        
-        confirmApproveBtn.textContent = "Traitement...";
-        
-        try {
-            const res = await fetch(`/api/admin/withdrawals/${id}/approve`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ proof })
-            });
+    if(confirmApproveBtn) {
+        confirmApproveBtn.addEventListener('click', async () => {
+            const id = approveIdInput.value;
+            const proof = proofInput.value.trim();
             
-            if (res.ok) {
-                approveModal.classList.add('hidden');
-                alert("✅ Paiement validé et notifié !");
-                fetchWithdrawals();
-            } else {
-                alert("Erreur lors de la validation.");
+            if(!proof) return alert("Veuillez entrer une preuve de paiement (Hash ou Réf).");
+            
+            confirmApproveBtn.textContent = "Traitement...";
+            
+            try {
+                const res = await fetch(`/api/admin/withdrawals/${id}/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ proof })
+                });
+                
+                if (res.ok) {
+                    approveModal.classList.add('hidden');
+                    alert("✅ Paiement validé et notifié !");
+                    fetchWithdrawals();
+                } else {
+                    alert("Erreur lors de la validation.");
+                }
+            } catch (e) {
+                alert("Erreur connexion.");
+            } finally {
+                confirmApproveBtn.textContent = "Envoyer & Valider";
             }
-        } catch (e) {
-            alert("Erreur connexion.");
-        } finally {
-            confirmApproveBtn.textContent = "Envoyer & Valider";
-        }
-    });
+        });
+    }
 
     // ===============================================
-    // SECTION 5 : GESTION DU BROADCAST (PHASE 4)
+    // SECTION 5 : GESTION DU BROADCAST (PHASE 4 - CORRIGÉE)
     // ===============================================
     const broadcastForm = document.getElementById('broadcast-form');
     const broadcastFeedback = document.getElementById('broadcast-feedback');
     const broadcastBtn = document.getElementById('broadcast-submit-btn');
-    const broadcastTestBtn = document.getElementById('broadcast-test-btn'); // Nouveau
+    const broadcastTestBtn = document.getElementById('broadcast-test-btn'); 
 
     // --- FONCTION D'ENVOI COMMUNE ---
     const sendBroadcast = async (isTest = false) => {
@@ -473,17 +455,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Confirmation différente selon le mode
         if (!isTest) {
             if (!confirm("⚠️ ATTENTION : Vous allez envoyer ce message à TOUS les utilisateurs.\n\nConfirmer l'envoi ?")) return;
         }
 
-        // UI Loading
         const btnToDisable = isTest ? broadcastTestBtn : broadcastBtn;
         const originalText = btnToDisable.innerHTML;
         btnToDisable.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
         btnToDisable.disabled = true;
-        if (isTest) broadcastBtn.disabled = true; else broadcastTestBtn.disabled = true; // Bloquer l'autre bouton aussi
+        if (isTest) broadcastBtn.disabled = true; else broadcastTestBtn.disabled = true; 
         
         broadcastFeedback.textContent = '';
 
@@ -492,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
             imageUrl: document.getElementById('broadcast-image').value || null,
             buttonText: document.getElementById('broadcast-btn-text').value || null,
             buttonUrl: document.getElementById('broadcast-btn-url').value || null,
-            isTest: isTest // On dit au serveur que c'est un test
+            isTest: isTest 
         };
 
         try {
@@ -507,7 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 broadcastFeedback.className = 'text-green-500 text-center text-sm font-bold mt-2';
                 broadcastFeedback.textContent = `✅ ${data.message}`;
-                if (!isTest) broadcastForm.reset(); // On vide le form seulement si c'est la vraie diffusion
+                if (!isTest) broadcastForm.reset(); 
             } else {
                 broadcastFeedback.className = 'text-red-500 text-center text-sm font-bold mt-2';
                 broadcastFeedback.textContent = `❌ Erreur : ${data.message}`;
@@ -522,56 +502,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     if (broadcastForm) {
-        // Clic sur "Tester"
         broadcastTestBtn.addEventListener('click', () => sendBroadcast(true));
 
-        // Clic sur "Envoyer" (Submit du formulaire)
         broadcastForm.addEventListener('submit', (e) => {
             e.preventDefault();
             sendBroadcast(false);
-        });
-    }
-            e.preventDefault();
-
-            // Confirmation de sécurité
-            if (!confirm("⚠️ ATTENTION : Vous allez envoyer ce message à TOUS les utilisateurs inscrits.\n\nConfirmer l'envoi ?")) return;
-
-            // UI Loading
-            const originalText = broadcastBtn.innerHTML;
-            broadcastBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi en cours...';
-            broadcastBtn.disabled = true;
-            broadcastFeedback.textContent = '';
-
-            const payload = {
-                message: document.getElementById('broadcast-message').value,
-                imageUrl: document.getElementById('broadcast-image').value || null,
-                buttonText: document.getElementById('broadcast-btn-text').value || null,
-                buttonUrl: document.getElementById('broadcast-btn-url').value || null
-            };
-
-            try {
-                const res = await fetch('/api/admin/broadcast', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify(payload)
-                });
-
-                const data = await res.json();
-
-                if (res.ok) {
-                    broadcastFeedback.className = 'text-green-500 text-center text-sm font-bold mt-2';
-                    broadcastFeedback.textContent = `✅ ${data.message}`;
-                    broadcastForm.reset();
-                } else {
-                    broadcastFeedback.className = 'text-red-500 text-center text-sm font-bold mt-2';
-                    broadcastFeedback.textContent = `❌ Erreur : ${data.message}`;
-                }
-            } catch (error) {
-                broadcastFeedback.textContent = "❌ Erreur de connexion.";
-            } finally {
-                broadcastBtn.innerHTML = originalText;
-                broadcastBtn.disabled = false;
-            }
         });
     }
 
