@@ -794,22 +794,31 @@ app.get('/api/admin/pricing/rates', verifyAdminToken, async (req, res) => {
     }
 });
 
-// Route pour définir les nouveaux taux de change manuels
+// Route pour définir les nouveaux taux de change manuels (CORRIGÉE DYNAMIQUE)
 app.post('/api/admin/pricing/rates', verifyAdminToken, async (req, res) => {
     const receivedRates = req.body;
-    const allCryptos = ['usdt', 'btc', 'eth', 'bnb', 'trx', 'xrp', 'usdt_bep20', 'btc_bep20', 'matic', 'ton'];
     const newRatesObject = {};
 
-   for (const crypto of allCryptos) {
-        const buyRate = parseFloat(receivedRates[`${crypto}-buy-rate`]);
-        const sellRate = parseFloat(receivedRates[`${crypto}-sell-rate`]);
-        if (!isNaN(buyRate) && !isNaN(sellRate)) {
-            newRatesObject[crypto] = { buy: buyRate, sell: sellRate };
+    // Au lieu d'une liste fixe, on parcourt tout ce que le formulaire a envoyé
+    Object.keys(receivedRates).forEach(key => {
+        // On repère les champs qui finissent par "-buy-rate" (ex: "usdt-buy-rate")
+        if (key.endsWith('-buy-rate')) {
+            // On extrait l'ID de la crypto (ex: "usdt")
+            const cryptoId = key.replace('-buy-rate', '');
+            
+            const buyVal = parseFloat(receivedRates[key]);
+            const sellVal = parseFloat(receivedRates[`${cryptoId}-sell-rate`]);
+
+            // Si les valeurs sont valides, on les ajoute à l'objet de sauvegarde
+            if (!isNaN(buyVal) && !isNaN(sellVal)) {
+                newRatesObject[cryptoId] = { buy: buyVal, sell: sellVal };
+            }
         }
-    }
+    });
 
     try {
         const docRef = db.collection('configuration').doc('manual_rates');
+        // On sauvegarde le nouvel objet dynamique
         await docRef.set({
             rates: newRatesObject,
             lastUpdatedBy: req.user.email,
@@ -817,6 +826,7 @@ app.post('/api/admin/pricing/rates', verifyAdminToken, async (req, res) => {
         });
         res.status(200).json({ message: 'Taux de change mis à jour avec succès.' });
     } catch (error) {
+        console.error("Erreur sauvegarde taux:", error);
         res.status(500).json({ message: 'Erreur serveur.' });
     }
 });
