@@ -2,154 +2,214 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ATEX App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATEXLY Mini App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Animation fluide pour les transitions */
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Masquer la scrollbar pour un look clean */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
 </head>
 <body>
-
-    <div id="splash-screen">
-        <i class="fas fa-bolt fa-3x splash-icon"></i>
-        <h2 class="splash-text">ATEXLY</h2>
-    </div>
-
     <div id="app">
-        <main id="main-content" class="hidden">
-            
-            <section id="exchange" class="page active">
-                <div class="app-header">
-                    <h1 class="app-title">Échange</h1>
-                    <div class="status-badge">
-                        <i class="fas fa-circle status-dot"></i> En ligne
-                    </div>
+        <div id="maintenance-screen" class="hidden fixed inset-0 z-[100] bg-slate-900 flex flex-col justify-center items-center p-8 text-center bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
+            <div class="relative mb-8">
+                <div class="absolute inset-0 bg-blue-500 blur-xl opacity-20 animate-pulse rounded-full"></div>
+                <div class="relative bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-2xl">
+                    <i class="fas fa-rocket text-5xl text-blue-500 animate-bounce"></i>
                 </div>
+            </div>
+            <h1 class="text-3xl font-extrabold text-white mb-3 tracking-tight">Mise à niveau...</h1>
+            <p class="text-slate-400 text-sm leading-relaxed max-w-xs mx-auto">
+                Nous installons de nouvelles fonctionnalités pour propulser vos échanges. ATEXLY revient dans quelques minutes.
+            </p>
+            
+            <div class="mt-8 flex gap-2">
+                <span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                <span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-75"></span>
+                <span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-150"></span>
+            </div>
+        </div>
+        <div id="splash-screen">
+            <h1>ATEXLY</h1>
+            <p>Bienvenue</p>
+        </div>
 
-                <div class="glass-card">
-                    <div class="tabs-container">
-                        <button id="buy-tab" class="tab-btn buy active">J'achète</button>
-                        <button id="sell-tab" class="tab-btn sell">Je vends</button>
+        <main id="main-content" class="hidden">
+            <section id="exchange" class="page active">
+                <div class="calculator">
+                    <div class="tabs">
+                        <button id="buy-tab" class="tab-btn active">Acheter des Cryptos</button>
+                        <button id="sell-tab" class="tab-btn">Vendre des Cryptos</button>
                     </div>
-
-                    <div class="input-group">
-                        <label class="input-label" for="amount-to-send" id="amount-label">Montant (FCFA)</label>
-                        <div class="input-row">
-                            <input type="number" id="amount-to-send" class="input-field" placeholder="0" inputmode="decimal">
-                            <span id="currency-label" class="input-suffix">FCFA</span>
-                        </div>
+                    <div class="form-group">
+                        <label for="amount-to-send">Montant (FCFA)</label>
+                        <input type="number" id="amount-to-send" placeholder="0">
+                        <span>FCFA</span>
                     </div>
-
-                    <div class="input-group">
-                        <label class="input-label" for="crypto-select">Crypto-monnaie</label>
-                        <select id="crypto-select" class="input-field">
-                            <option>Chargement...</option>
-                        </select>
+                    <div class="form-group">
+                        <label for="crypto-select">Crypto-monnaie</label>
+                       <select id="crypto-select" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                        <option value="" disabled selected>Chargement des cryptos...</option>
+                       </select>
                     </div>
-
-                    <div class="result-box">
-                        <div class="result-label">Vous recevrez environ</div>
-                        <div id="amount-to-receive" class="result-value">
-                            0.00 <span class="result-currency">USDT</span>
-                        </div>
+                    <div id="wallet-address-group" class="form-group">
+                        <label for="wallet-address">Votre Adresse Wallet</label>
+                        <input type="text" id="wallet-address" placeholder="Entrez votre adresse de portefeuille">
                     </div>
-
-                    <div id="wallet-group" class="input-group">
-                        <label class="input-label" for="wallet-address">Votre Adresse Wallet</label>
-                        <input type="text" id="wallet-address" class="input-field" placeholder="Collez l'adresse ici...">
+                    <div id="mm-provider-group" class="form-group">
+                        <label for="mm-provider">Opérateur Mobile Money</label>
+                       <select id="mm-provider">
+    <option value="orange-senegal">Orange Money</option>
+    <option value="wave-senegal">Wave</option>
+    <option value="moov-togo">Moov</option>
+    <option value="yas-togo">Yas</option>
+    </select>
                     </div>
-
-                    <div id="mm-group" class="input-group hidden">
-                        <label class="input-label" for="mm-provider">Opérateur & Numéro</label>
-                        <div class="stats-grid" style="margin: 0; gap: 10px;">
-                            <select id="mm-provider" class="input-field">
-                                <option value="orange-senegal">Orange Money</option>
-                                <option value="wave-senegal">Wave</option>
-                                <option value="moov-togo">Moov</option>
-                                <option value="yas-togo">Yas</option>
-                            </select>
-                            <input type="tel" id="phone-number" class="input-field" placeholder="+221...">
-                        </div>
+                    <div id="phone-number-group" class="form-group">
+                        <label for="phone-number">Votre Numéro de Téléphone</label>
+                        <input type="tel" id="phone-number" placeholder="Ex: +221...">
                     </div>
-
-                    <div id="phone-group-buy" class="input-group">
-                        <label class="input-label" for="phone-number-buy">Votre Numéro (Pour le paiement)</label>
-                        <input type="tel" id="phone-number-buy" class="input-field" placeholder="Ex: +221 77...">
+                    <div class="result">
+                        <p>Vous recevrez ≈</p>
+                        <h3 id="amount-to-receive">0.00 USDT</h3>
                     </div>
-
-                    <button id="submit-btn" class="action-btn">Continuer</button>
+                    <button id="submit-btn" class="submit-btn">Acheter</button>
                 </div>
             </section>
 
-            <section id="earn" class="page">
-                <h1 class="app-title" style="margin-bottom:20px;">Affiliation</h1>
-
-                <div class="glass-card level-card">
-                    <div class="level-ring">
-                        <span id="current-level-emoji" class="level-badge">🥉</span>
+           <section id="earn" class="page px-4 pt-6 pb-24 fade-in">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">Espace Gagner</h2>
+                        <p class="text-xs text-gray-500 font-medium">Programme Partenaire ATEXLY</p>
                     </div>
-                    <div class="level-info">
-                        <h3 id="current-level-name">Niveau Débutant</h3>
-                        <div class="progress-container">
-                            <div id="level-progress-bar" class="progress-bar"></div>
+                    <div class="bg-blue-50 p-2 rounded-full">
+                        <i class="fas fa-gift text-blue-600 text-lg"></i>
+                    </div>
+                </div>
+                
+                <div id="no-campaign-view" class="hidden flex flex-col items-center justify-center py-12 text-center">
+                    <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                        <i class="fas fa-hourglass-half text-3xl text-gray-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-700">Saison fermée</h3>
+                    <p class="text-gray-500 text-xs mt-2 max-w-[200px]">Les campagnes sont temporairement en pause. Préparez-vous pour la prochaine vague !</p>
+                </div>
+
+                <div id="active-campaign-view" class="space-y-6">
+                    
+                    <div class="relative w-full h-48 bg-gradient-to-br from-violet-600 to-indigo-700 rounded-2xl shadow-xl overflow-hidden p-5 flex flex-col justify-between transform transition hover:scale-[1.01]">
+                        <div class="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-10 blur-2xl"></div>
+                        <div class="absolute bottom-0 left-0 -ml-8 -mb-8 w-32 h-32 rounded-full bg-blue-400 opacity-20 blur-xl"></div>
+                        
+                        <div class="relative z-10">
+                            <p class="text-indigo-200 text-xs font-semibold tracking-wider uppercase">Lien Exclusif</p>
+                            <p id="referral-promo-text" class="text-white font-bold text-lg mt-1 leading-snug">Chargement...</p>
                         </div>
-                        <p id="next-level-info" class="next-level-text">Encore 5 invités pour le Niveau 1 (5%)</p>
-                    </div>
-                </div>
 
-                <div class="stats-grid">
-                    <div class="glass-card stat-item">
-                        <i class="fas fa-wallet stat-icon" style="color:#0A84FF;"></i>
-                        <div class="stat-label">Gains Disponibles</div>
-                        <div id="total-earnings" class="stat-value">0.00 $</div>
+                        <div class="relative z-10">
+                            <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-1.5 flex items-center justify-between pl-3">
+                                <span id="referral-link" class="text-white/90 text-[10px] font-mono truncate max-w-[160px]">https://t.me/...</span>
+                                <button id="copy-referral-link" class="bg-white text-indigo-700 px-3 py-2 rounded-lg text-xs font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition flex items-center gap-1">
+                                    <i class="far fa-copy"></i> Copier
+                                </button>
+                            </div>
+                            <p class="text-[10px] text-indigo-200 mt-2 text-center flex items-center justify-center gap-1">
+                                <i class="far fa-clock"></i> Expire à la fin de la saison
+                            </p>
+                        </div>
                     </div>
-                    <div class="glass-card stat-item">
-                        <i class="fas fa-users stat-icon" style="color:#FF9F0A;"></i>
-                        <div class="stat-label">Filleuls Actifs</div>
-                        <div id="referral-count" class="stat-value">0</div>
-                    </div>
-                </div>
 
-                <div class="glass-card">
-                    <div style="font-size:13px; font-weight:600; margin-bottom:10px;">Votre lien unique</div>
-                    <div class="referral-box">
-                        <span id="referral-link" class="referral-link-text">Chargement...</span>
-                        <button id="copy-link-btn" class="copy-btn">Copier</button>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
+                            <div class="w-8 h-8 bg-green-50 rounded-full flex items-center justify-center mb-2">
+                                <i class="fas fa-wallet text-green-500 text-sm"></i>
+                            </div>
+                            <p class="text-xs text-gray-400 font-medium">Gains Totaux</p>
+                            <p id="total-earnings" class="text-lg font-bold text-gray-800 mt-1">0.00 USDT</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
+                            <div class="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center mb-2">
+                                <i class="fas fa-users text-blue-500 text-sm"></i>
+                            </div>
+                            <p class="text-xs text-gray-400 font-medium">Amis Invités</p>
+                            <p id="referral-count" class="text-lg font-bold text-gray-800 mt-1">0</p>
+                        </div>
                     </div>
-                </div>
 
-                <button id="withdraw-btn" class="action-btn withdraw-btn">
-                    <i class="fas fa-paper-plane" style="margin-right:8px;"></i> Demander un retrait
-                </button>
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                            <h4 id="active-referrals-header" class="text-xs font-bold text-gray-600 uppercase tracking-wide">Filleuls Validés <span>(0)</span></h4>
+                            <i class="fas fa-check-circle text-green-500"></i>
+                        </div>
+                        <div id="active-referrals-list" class="p-0 max-h-40 overflow-y-auto no-scrollbar">
+                            </div>
+                    </div>
+                    
+                    <button id="show-withdrawal-btn" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg shadow-slate-300 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2">
+                        <i class="fas fa-paper-plane"></i> <span>Demander un retrait</span>
+                    </button>
+                </div>
             </section>
 
             <section id="profile" class="page">
-                <div class="profile-header">
-                    <div class="avatar-circle" id="user-avatar">?</div>
-                    <h2 id="user-name" class="user-name">Utilisateur</h2>
-                    <p id="user-id" class="user-id">ID: ...</p>
-                </div>
-
-                <h3 class="history-title">Historique Récent</h3>
-                <div id="history-list" class="glass-card history-list">
-                    <p style="text-align:center; padding:20px; color:#8E8E93; font-size:13px;">Chargement...</p>
+                <div id="user-greeting">
+                    </div>
+                <h3>Mon Historique</h3>
+                <div id="transaction-history-container">
+                    <p>Chargement de l'historique...</p>
                 </div>
             </section>
-
         </main>
 
-        <nav>
-            <button data-page="exchange" class="active">
-                <i class="fas fa-sync-alt"></i>
-                <span>Trade</span>
-            </button>
-            <button data-page="earn">
-                <i class="fas fa-gift"></i>
-                <span>Gagner</span>
-            </button>
-            <button data-page="profile">
-                <i class="fas fa-user"></i>
-                <span>Profil</span>
-            </button>
+        <div id="withdrawal-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <button id="close-withdrawal-modal" class="modal-close-btn">&times;</button>
+                <h3>Demande de Retrait</h3>
+                <div class="form-group">
+                    <label>Méthode de retrait</label>
+                    <div class="radio-group">
+                        <input type="radio" id="method-usdt" name="withdrawal-method" value="usdt" checked>
+                        <label for="method-usdt">USDT (TRC20)</label>
+                        <input type="radio" id="method-mm" name="withdrawal-method" value="mm">
+                        <label for="method-mm">Mobile Money</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="withdrawal-amount">Montant à retirer (min: 5 USDT)</label>
+                    <input type="number" id="withdrawal-amount" placeholder="0.00">
+                </div>
+                <div id="withdrawal-usdt-group" class="form-group">
+                    <label for="withdrawal-wallet">Adresse Wallet USDT (TRC20)</label>
+                    <input type="text" id="withdrawal-wallet" placeholder="Votre adresse TRC20">
+                </div>
+                <div id="withdrawal-mm-group" class="form-group hidden">
+                    <label for="withdrawal-mm-provider">Opérateur</label>
+                    <select id="withdrawal-mm-provider">
+                         <option value="Orange Money">Orange Money</option>
+                         <option value="Moov">Moov</option>
+                         <option value="MTN">MTN</option>
+                         <option value="Wave">Wave</option>
+                         <option value="Yas">Yas</option>
+                    </select>
+                    <label for="withdrawal-phone">Numéro de téléphone</label>
+                    <input type="tel" id="withdrawal-phone" placeholder="+221...">
+                </div>
+                <button id="submit-withdrawal-btn" class="submit-btn">Confirmer le retrait</button>
+            </div>
+        </div>
+
+        <nav id="nav-bar" class="hidden">
+            <button data-page="exchange" class="active">Échange</button>
+            <button data-page="earn">Gagner</button>
+            <button data-page="profile">Profil</button>
         </nav>
     </div>
 

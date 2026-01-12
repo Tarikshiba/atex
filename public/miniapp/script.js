@@ -1,323 +1,471 @@
 document.addEventListener('DOMContentLoaded', () => {
     const tg = window.Telegram.WebApp;
-    tg.expand(); // Plein écran direct
+    tg.ready();
 
-    // --- VARIABLES D'ÉTAT ---
-    let state = {
-        prices: {},
-        cryptos: [],
-        mode: 'buy', // 'buy' ou 'sell'
-        user: tg.initDataUnsafe?.user || { first_name: 'Visiteur', id: 0 },
-        settings: {}
-    };
+    // --- VARIABLES GLOBALES ---
+    let atexPrices = {};
+    let availableCryptosList = []; // Nouvelle variable pour stocker les infos (symboles, réseaux...)
+    let currentMode = 'buy';
 
-    // --- DOM ELEMENTS ---
-    const els = {
-        amountInput: document.getElementById('amount-to-send'),
-        cryptoSelect: document.getElementById('crypto-select'),
-        resultDisplay: document.getElementById('amount-to-receive'),
-        submitBtn: document.getElementById('submit-btn'),
-        buyTab: document.getElementById('buy-tab'),
-        sellTab: document.getElementById('sell-tab'),
-        walletGroup: document.getElementById('wallet-group'),
-        mmGroup: document.getElementById('mm-group'),
-        phoneGroupBuy: document.getElementById('phone-group-buy'),
-        amountLabel: document.getElementById('amount-label'),
-        currencyLabel: document.getElementById('currency-label'),
-        splash: document.getElementById('splash-screen'),
-        main: document.getElementById('main-content')
-    };
+    // --- ÉLÉMENTS DU DOM ---
+    const amountToSendInput = document.getElementById('amount-to-send');
+    const cryptoSelect = document.getElementById('crypto-select');
+    const amountToReceiveDisplay = document.getElementById('amount-to-receive');
+    const submitBtn = document.getElementById('submit-btn');
+    const buyTab = document.getElementById('buy-tab');
+    const sellTab = document.getElementById('sell-tab');
+    
+    // Sélecteurs améliorés pour éviter les erreurs si le label change
+    const amountLabel = document.querySelector('label[for="amount-to-send"]');
+    const amountCurrencySpan = document.querySelector('.calculator .form-group span'); // Le "FCFA" à côté de l'input
+    
+    const walletAddressGroup = document.getElementById('wallet-address-group');
+    const walletAddressInput = document.getElementById('wallet-address');
+    const mmProviderSelect = document.getElementById('mm-provider');
+    const phoneNumberInput = document.getElementById('phone-number');
+    const userGreetingDiv = document.getElementById('user-greeting');
+    const historyContainer = document.getElementById('transaction-history-container');
+    const referralLinkSpan = document.getElementById('referral-link');
+    const copyReferralLinkBtn = document.getElementById('copy-referral-link');
+    const totalEarningsP = document.getElementById('total-earnings');
+    const referralCountP = document.getElementById('referral-count');
 
-    // --- 1. INITIALISATION ---
-    async function init() {
+    // --- NOUVELLE FONCTION DE CHECK-IN ---
+    async function performUserCheckIn() {
         try {
-            // Check-in Utilisateur
-            await fetch('/api/miniapp/user-check-in', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ user: state.user, referredByCode: tg.initDataUnsafe?.start_param })
-            });
+            const user = tg.initDataUnsafe?.user;
+            const referredByCode = tg.initDataUnsafe?.start_param || null;
 
-            // Charger Config & Prix
-            const [configRes, settingsRes] = await Promise.all([
-                fetch('/api/config'),
-                fetch('/api/settings')
-            ]);
-            
-            const configData = await configRes.json();
-            state.settings = await settingsRes.json();
-            state.prices = configData.atexPrices;
-            state.cryptos = configData.availableCryptos || [];
-
-            if (state.settings.maintenance_mode) {
-                document.body.innerHTML = '<h1 style="color:white;text-align:center;margin-top:50%;">Maintenance en cours...</h1>';
-                return;
+            if (user) {
+                console.log('Check-in utilisateur...');
+                await fetch('/api/miniapp/user-check-in', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user, referredByCode })
+                });
             }
-
-            setupUI();
-            setupEarnSection();
-            setupProfile();
-            
-            // Cacher Splash
-            setTimeout(() => {
-                els.splash.style.display = 'none';
-                els.main.classList.remove('hidden');
-            }, 500);
-
-        } catch (e) {
-            console.error("Init Error:", e);
-            els.splash.innerHTML = `<p style="color:red">Erreur de connexion. Relancez.</p>`;
+        } catch (error) {
+            console.error("Erreur check-in:", error);
         }
     }
 
-    // --- 2. SETUP UI (Remplir les listes, écouteurs) ---
-    function setupUI() {
-        // Remplir Select Crypto
-        els.cryptoSelect.innerHTML = state.cryptos.map(c => 
-            `<option value="${c.id}">${c.name}</option>`
-        ).join('');
-
-        // Listeners Calculatrice
-        els.amountInput.addEventListener('input', calculate);
-        els.cryptoSelect.addEventListener('change', () => { updateLabels(); calculate(); });
-        
-        els.buyTab.addEventListener('click', () => setMode('buy'));
-        els.sellTab.addEventListener('click', () => setMode('sell'));
-
-        els.submitBtn.addEventListener('click', handleSubmit);
-
-        // Navigation Tabs
-        document.querySelectorAll('nav button').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-                
-                btn.classList.add('active');
-                document.getElementById(btn.dataset.page).classList.add('active');
-            });
-        });
-
-        // Init Labels
-        setMode('buy'); 
+    // --- HELPER : Récupérer le symbole d'une crypto (ex: USDT) depuis son ID (ex: usdt_trc20) ---
+    function getCryptoSymbol(id) {
+        const crypto = availableCryptosList.find(c => c.id === id);
+        return crypto ? crypto.symbol : id.toUpperCase();
     }
 
-    // --- 3. LOGIQUE MODE (ACHAT / VENTE) ---
-    function setMode(mode) {
-        state.mode = mode;
-        
-        // Classes actives
-        if(mode === 'buy') {
-            els.buyTab.classList.add('active');
-            els.sellTab.classList.remove('active');
-            els.walletGroup.classList.remove('hidden'); // On demande wallet pour recevoir crypto
-            els.mmGroup.classList.add('hidden'); // On cache MM reception (c'est nous qui recevons l'argent)
-            els.phoneGroupBuy.classList.remove('hidden'); // On demande numero payeur
-            els.submitBtn.textContent = "Acheter maintenant";
-            els.submitBtn.style.background = "#30D158"; // Vert
-        } else {
-            els.sellTab.classList.add('active');
-            els.buyTab.classList.remove('active');
-            els.walletGroup.classList.add('hidden'); // Pas besoin de wallet
-            els.mmGroup.classList.remove('hidden'); // On demande ou envoyer l'argent (MM)
-            els.phoneGroupBuy.classList.add('hidden');
-            els.submitBtn.textContent = "Vendre maintenant";
-            els.submitBtn.style.background = "#FF453A"; // Rouge
-        }
-        updateLabels();
-        calculate();
-    }
-
-    function updateLabels() {
-        const cryptoId = els.cryptoSelect.value;
-        const crypto = state.cryptos.find(c => c.id === cryptoId);
-        const symbol = crypto ? crypto.symbol : '---';
-
-        if(state.mode === 'buy') {
-            els.amountLabel.textContent = "Je paie (FCFA)";
-            els.currencyLabel.textContent = "FCFA";
-            els.resultDisplay.innerHTML = `0.00 <span style="font-size:16px; color:#8E8E93;">${symbol}</span>`;
-        } else {
-            els.amountLabel.textContent = `Je vends (${symbol})`;
-            els.currencyLabel.textContent = symbol;
-            els.resultDisplay.innerHTML = `0 <span style="font-size:16px; color:#8E8E93;">FCFA</span>`;
-        }
-    }
-
-    // --- 4. CALCULATRICE CORE ---
+    // --- LOGIQUE DU CALCULATEUR ---
     function calculate() {
-        const amount = parseFloat(els.amountInput.value);
-        const cryptoId = els.cryptoSelect.value;
+        const amount = parseFloat(amountToSendInput.value) || 0;
+        const selectedId = cryptoSelect.value;
         
-        // Sécurité anti-crash
-        if (!amount || isNaN(amount) || !state.prices[cryptoId]) {
-            const symbol = state.mode === 'buy' ? getSymbol(cryptoId) : 'FCFA';
-            els.resultDisplay.innerHTML = `0.00 <span style="font-size:16px; color:#8E8E93;">${symbol}</span>`;
+        // Si pas de prix ou pas de crypto sélectionnée
+        if (amount === 0 || !atexPrices[selectedId]) {
+            const initialCurrency = currentMode === 'buy' ? getCryptoSymbol(selectedId) : 'FCFA';
+            amountToReceiveDisplay.textContent = `0.00 ${initialCurrency}`;
             return;
         }
 
-        const rate = state.prices[cryptoId][state.mode]; // Taux Buy ou Sell
-        let result = 0;
+        const rate = atexPrices[selectedId][currentMode]; // Rate Achat ou Vente
+        let result, resultCurrency;
 
-        if (state.mode === 'buy') {
-            // (FCFA / Taux) = Crypto
+        if (currentMode === 'buy') {
+            // Achat : FCFA divisé par taux
             result = amount / rate;
-            const symbol = getSymbol(cryptoId);
-            const decimals = (symbol === 'BTC' || symbol === 'ETH') ? 6 : 2;
-            els.resultDisplay.innerHTML = `${result.toFixed(decimals)} <span style="font-size:16px; color:#8E8E93;">${symbol}</span>`;
+            resultCurrency = getCryptoSymbol(selectedId);
         } else {
-            // (Crypto * Taux) = FCFA
+            // Vente : Crypto multiplié par taux
             result = amount * rate;
-            els.resultDisplay.innerHTML = `${Math.floor(result).toLocaleString()} <span style="font-size:16px; color:#8E8E93;">FCFA</span>`;
+            resultCurrency = 'FCFA';
+        }
+
+       // Affichage (6 décimales pour BTC/ETH, 2 pour les autres)
+        const symbol = getCryptoSymbol(selectedId).toLowerCase();
+        const decimals = (symbol === 'btc' || symbol === 'eth') ? 6 : 2;
+        amountToReceiveDisplay.textContent = `${result.toFixed(decimals)} ${resultCurrency}`;
+
+        // --- NOUVEAU : VALIDATION VISUELLE DES LIMITES ---
+        validateLimits(amount, selectedId);
+    }
+
+    function validateLimits(amount, cryptoId) {
+        const crypto = availableCryptosList.find(c => c.id === cryptoId);
+        if (!crypto) return;
+
+        let isValid = true;
+        let errorMessage = "";
+
+        // Reset UI
+        amountToSendInput.classList.remove('border-red-500', 'text-red-500');
+        amountLabel.classList.remove('text-red-500');
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = "1";
+        
+        // Nettoyage ancien message d'erreur
+        const existingError = document.getElementById('limit-error-msg');
+        if (existingError) existingError.remove();
+
+        // Vérification
+        if (currentMode === 'buy' && crypto.minBuy > 0 && amount < crypto.minBuy) {
+            isValid = false;
+            errorMessage = `Min: ${crypto.minBuy.toLocaleString()} FCFA`;
+        } else if (currentMode === 'sell' && crypto.minSell > 0 && amount < crypto.minSell) {
+            isValid = false;
+            errorMessage = `Min: ${crypto.minSell} ${crypto.symbol}`;
+        }
+
+        // Application Erreur
+        if (!isValid && amount > 0) { // On n'affiche l'erreur que si l'utilisateur a commencé à taper
+            amountToSendInput.classList.add('border-red-500', 'text-red-500');
+            amountLabel.classList.add('text-red-500');
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = "0.5";
+
+            // Ajout message sous l'input
+            const errorP = document.createElement('p');
+            errorP.id = 'limit-error-msg';
+            errorP.className = 'text-red-500 text-xs mt-1 font-bold';
+            errorP.innerText = `⚠️ ${errorMessage}`;
+            amountToSendInput.parentNode.appendChild(errorP);
         }
     }
 
-    function getSymbol(id) {
-        const c = state.cryptos.find(x => x.id === id);
-        return c ? c.symbol : id.toUpperCase();
-    }
-
-    // --- 5. LOGIQUE GAGNER (LEVELS) ---
-    async function setupEarnSection() {
+    // --- RÉCUPÉRATION DE LA CONFIG (PRIX + LISTE CRYPTOS) ---
+    async function fetchPrices() {
         try {
-            const res = await fetch(`/api/miniapp/referral-info/${state.user.id}`);
-            const data = await res.json();
+            const response = await fetch('/api/config');
+            if (!response.ok) throw new Error('Erreur réseau');
+            const data = await response.json();
             
-            // Calcul du Niveau
-            const count = data.activeReferrals ? data.activeReferrals.length : 0;
-            const levels = state.settings.levels || { l1: {threshold:5}, l2: {threshold:20}, l3: {threshold:50} };
-            
-            let emoji = "🥉";
-            let name = "Débutant";
-            let nextTarget = levels.l1.threshold;
-            let progress = (count / nextTarget) * 100;
+            atexPrices = data.atexPrices;
+            availableCryptosList = data.availableCryptos || [];
 
-            if (count >= levels.l3.threshold) {
-                emoji = "🥇"; name = "Expert (Gold)"; progress = 100; nextTarget = "Max";
-            } else if (count >= levels.l2.threshold) {
-                emoji = "🥈"; name = "Avancé (Silver)"; nextTarget = levels.l3.threshold; progress = ((count - levels.l2.threshold) / (levels.l3.threshold - levels.l2.threshold)) * 100;
-            } else if (count >= levels.l1.threshold) {
-                emoji = "🥉"; name = "Actif (Bronze)"; nextTarget = levels.l2.threshold; progress = ((count - levels.l1.threshold) / (levels.l2.threshold - levels.l1.threshold)) * 100;
+            // --- CONSTRUCTION DU MENU DÉROULANT ---
+            // On sauvegarde la sélection actuelle pour ne pas la perdre si possible
+            const currentSelection = cryptoSelect.value;
+            cryptoSelect.innerHTML = ''; // On vide "Chargement..."
+
+            if (availableCryptosList.length === 0) {
+                const opt = document.createElement('option');
+                opt.text = "Aucune crypto disponible";
+                cryptoSelect.add(opt);
+            } else {
+                availableCryptosList.forEach(crypto => {
+                    const option = document.createElement('option');
+                    option.value = crypto.id; // L'ID sert de valeur (ex: usdt_trc20)
+                    option.text = crypto.name; // Le nom s'affiche (ex: USDT TRC20)
+                    cryptoSelect.add(option);
+                });
+
+                // Restaurer la sélection ou mettre la première par défaut
+                if (currentSelection && availableCryptosList.some(c => c.id === currentSelection)) {
+                    cryptoSelect.value = currentSelection;
+                } else {
+                    cryptoSelect.value = availableCryptosList[0].id;
+                }
             }
 
-            // Mise à jour DOM
-            document.getElementById('current-level-emoji').textContent = emoji;
-            document.getElementById('current-level-name').textContent = name;
-            document.getElementById('level-progress-bar').style.width = `${Math.min(progress, 100)}%`;
-            document.getElementById('next-level-info').textContent = nextTarget === "Max" ? "Niveau Max atteint !" : `${count} / ${nextTarget} pour le niveau suivant`;
-            
-            document.getElementById('total-earnings').textContent = `${(data.referralEarnings || 0).toFixed(2)} USDT`;
-            document.getElementById('referral-count').textContent = count;
+            // Recalculer après la mise à jour
+            calculate();
+            updateInterfaceLabels(); 
 
-            // Lien
-            const link = `https://t.me/AtexOfficielBot/atexly?startapp=${data.referralCode}_${state.settings.referral_campaign_id||'v1'}`;
-            document.getElementById('referral-link').textContent = link;
-            document.getElementById('copy-link-btn').onclick = () => {
-                navigator.clipboard.writeText(link);
-                tg.showAlert("Lien copié !");
-            };
-
-            // Bouton Retrait
-            document.getElementById('withdraw-btn').onclick = () => {
-                const amount = data.referralEarnings || 0;
-                if(amount < (state.settings.min_withdrawal || 5)) return tg.showAlert(`Minimum de retrait : ${state.settings.min_withdrawal || 5} USDT`);
-                
-                // Ici on pourrait ouvrir une modale, pour simplifier on demande l'adresse
-                tg.showPopup({
-                    title: 'Retrait USDT',
-                    message: `Vous allez retirer ${amount.toFixed(2)} USDT. Entrez votre adresse TRC20:`,
-                    buttons: [{type: 'ok', id: 'ok'}, {type: 'cancel'}]
-                }, (btnId) => {
-                    if(btnId === 'ok') {
-                        // Pour faire simple dans cette version, on dit à l'utilisateur de contacter le support ou on implémente un prompt JS standard
-                        // Note: Telegram WebApp ne supporte pas prompt(). Il faut une modale HTML.
-                        // Pour l'instant, on redirige vers le support pour valider manuellement si besoin ou on utilise la modale HTML existante (à adapter).
-                        alert("Fonctionnalité en cours de raccordement final."); 
-                    }
-                });
-            };
-
-        } catch (e) { console.error("Earn Error", e); }
+        } catch (error) {
+            console.error("Erreur config:", error);
+            cryptoSelect.innerHTML = '<option>Erreur de chargement</option>';
+        }
     }
 
-    // --- 6. PROFIL & HISTORIQUE ---
-    async function setupProfile() {
-        document.getElementById('user-name').textContent = state.user.first_name;
-        document.getElementById('user-id').textContent = `ID: ${state.user.id}`;
-        document.getElementById('user-avatar').textContent = state.user.first_name.charAt(0);
+    function updateInterfaceLabels() {
+        const selectedId = cryptoSelect.value;
+        const symbol = getCryptoSymbol(selectedId);
+        const selectedOptionText = cryptoSelect.options[cryptoSelect.selectedIndex]?.text || symbol;
 
-        const list = document.getElementById('history-list');
-        try {
-            const res = await fetch(`/api/miniapp/my-transactions/${state.user.id}`);
-            const txs = await res.json();
-            
-            if(txs.length === 0) { list.innerHTML = '<p style="text-align:center; padding:20px; color:#555;">Aucune transaction.</p>'; return; }
-
-            list.innerHTML = txs.map(tx => `
-                <div class="tx-row">
-                    <div class="tx-icon">
-                        <i class="fas ${tx.type === 'buy' ? 'fa-arrow-down' : 'fa-arrow-up'}" style="color:${tx.type === 'buy' ? '#30D158' : '#FF453A'}"></i>
-                    </div>
-                    <div class="tx-details">
-                        <span class="tx-title">${tx.type === 'buy' ? 'Achat' : 'Vente'} ${tx.currencyTo || tx.currencyFrom}</span>
-                        <span class="tx-date">${new Date(tx.createdAt).toLocaleDateString()}</span>
-                    </div>
-                    <div class="tx-amount">
-                        ${tx.amountToSend} ${tx.currencyFrom === 'FCFA' ? 'FCFA' : ''}
-                        <span class="tx-status st-${tx.status}">${tx.status === 'completed' ? 'Succès' : 'Attente'}</span>
-                    </div>
-                </div>
-            `).join('');
-        } catch(e) { list.innerHTML = '<p style="color:red; text-align:center;">Erreur historique</p>'; }
+        if (currentMode === 'buy') {
+            amountLabel.textContent = 'Montant (FCFA)';
+            amountCurrencySpan.textContent = 'FCFA';
+            submitBtn.textContent = 'Acheter';
+            submitBtn.style.backgroundColor = '#28a745';
+        } else {
+            amountLabel.textContent = `Montant (${selectedOptionText})`;
+            amountCurrencySpan.textContent = symbol;
+            submitBtn.textContent = 'Vendre';
+            submitBtn.style.backgroundColor = '#dc3545';
+        }
     }
 
-    // --- 7. SOUMISSION ---
-    async function handleSubmit() {
-        const amount = parseFloat(els.amountInput.value);
-        if(!amount || amount <= 0) return tg.showAlert("Montant invalide");
+    function switchMode(newMode) {
+        currentMode = newMode;
+        buyTab.classList.toggle('active', newMode === 'buy');
+        sellTab.classList.toggle('active', newMode === 'sell');
+        walletAddressGroup.classList.toggle('hidden', newMode !== 'buy');
+        
+        updateInterfaceLabels();
+        calculate();
+    }
 
-        const payload = {
-            type: state.mode,
-            amountToSend: amount,
-            cryptoId: els.cryptoSelect.value,
-            // Mapping des champs selon le mode
-            walletAddress: state.mode === 'buy' ? document.getElementById('wallet-address').value : 'N/A',
-            paymentMethod: state.mode === 'sell' ? document.getElementById('mm-provider').value : 'N/A',
-            phoneNumber: state.mode === 'buy' ? document.getElementById('phone-number-buy').value : document.getElementById('phone-number').value,
-            // Calcul côté serveur recommandé, mais on envoie l'estimatif
-            amountToReceive: parseFloat(els.resultDisplay.innerText), 
-            currencyFrom: state.mode === 'buy' ? 'FCFA' : getSymbol(els.cryptoSelect.value),
-            currencyTo: state.mode === 'buy' ? getSymbol(els.cryptoSelect.value) : 'FCFA',
-            telegramId: state.user.id,
-            telegramUsername: state.user.username
+    // --- ÉCOUTEURS D'ÉVÉNEMENTS ---
+    amountToSendInput.addEventListener('input', calculate);
+    
+    cryptoSelect.addEventListener('change', () => {
+        updateInterfaceLabels();
+        calculate();
+    });
+
+    buyTab.addEventListener('click', () => switchMode('buy'));
+    sellTab.addEventListener('click', () => switchMode('sell'));
+
+    submitBtn.addEventListener('click', async () => {
+        const user = tg.initDataUnsafe?.user;
+        const amountToSend = parseFloat(amountToSendInput.value);
+        const selectedId = cryptoSelect.value;
+        const selectedSymbol = getCryptoSymbol(selectedId);
+        
+        const resultText = amountToReceiveDisplay.textContent.split(' ')[0];
+        const amountToReceive = parseFloat(resultText);
+        
+        const walletAddress = walletAddressInput.value;
+        const paymentMethod = mmProviderSelect.value;
+        const phoneNumber = phoneNumberInput.value;
+
+        // Validations
+        if (!amountToSend || amountToSend <= 0) return tg.showAlert("Veuillez entrer un montant valide.");
+        
+        if (currentMode === 'buy' && !walletAddress) return tg.showAlert("Veuillez entrer votre adresse de portefeuille.");
+        
+        if (!phoneNumber) return tg.showAlert("Veuillez entrer votre numéro de téléphone.");
+        if (!phoneNumber.startsWith('+')) return tg.showAlert("Format invalide. Incluez l'indicatif (ex: +221...).");
+
+        // Construction des données pour le serveur
+        const transactionData = {
+            type: currentMode,
+            // Si achat : on envoie FCFA. Si vente : on envoie la Crypto (ex: USDT)
+            currencyFrom: currentMode === 'buy' ? 'FCFA' : selectedSymbol, 
+            amountToSend: amountToSend,
+            // Si achat : on reçoit Crypto. Si vente : on reçoit FCFA
+            currencyTo: currentMode === 'buy' ? selectedSymbol : 'FCFA',
+            amountToReceive: amountToReceive,
+            paymentMethod: paymentMethod,
+            walletAddress: walletAddress || 'non-requis',
+            phoneNumber: phoneNumber,
+            telegramUsername: user?.username || 'non-défini',
+            telegramId: user?.id || null,
+            
+            // --- AJOUT IMPORTANT : ON ENVOIE L'ID TECHNIQUE DE LA CRYPTO ---
+            // Cela aidera le serveur à retrouver le wallet admin exact pour la vente
+            cryptoId: selectedId 
         };
 
-        // Validation basique
-        if(state.mode === 'buy' && !payload.walletAddress) return tg.showAlert("Adresse wallet manquante");
-        if(!payload.phoneNumber) return tg.showAlert("Numéro de téléphone manquant");
-
-        els.submitBtn.disabled = true;
-        els.submitBtn.innerText = "Traitement...";
-
         try {
-            const res = await fetch('/api/miniapp/initiate-transaction', {
+            tg.MainButton.showProgress();
+            const response = await fetch('/api/miniapp/initiate-transaction', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(transactionData)
             });
-            const d = await res.json();
-            if(res.ok) {
-                tg.showAlert(d.message, () => tg.close());
-            } else {
-                tg.showAlert("Erreur: " + d.message);
-            }
-        } catch(e) {
-            tg.showAlert("Erreur réseau");
+            const data = await response.json();
+            
+            if (!response.ok) throw new Error(data.message || 'Erreur inconnue.');
+
+            // Si c'est une vente, on affiche simplement le message de succès (plus de redirection)
+            tg.showAlert(data.message, () => { tg.close(); });
+
+        } catch (error) {
+            tg.showAlert(`Erreur : ${error.message}`);
         } finally {
-            els.submitBtn.disabled = false;
-            els.submitBtn.innerText = state.mode === 'buy' ? "Acheter maintenant" : "Vendre maintenant";
+            tg.MainButton.hideProgress();
+        }
+    });
+
+    // --- COPIE LIEN PARRAINAGE ---
+    copyReferralLinkBtn.addEventListener('click', () => {
+        const link = referralLinkSpan.textContent;
+        if(link && link !== 'Erreur...') {
+            navigator.clipboard.writeText(link)
+                .then(() => {
+                    tg.HapticFeedback.notificationOccurred('success');
+                    tg.showAlert("Lien copié !");
+                })
+                .catch(() => tg.showAlert("Erreur copie."));
+        }
+    });
+
+    // --- FONCTIONS HISTORIQUE & PARRAINAGE (Inchangées, juste intégrées) ---
+    function formatStatus(status) {
+        switch (status) {
+            case 'completed': return 'Complétée';
+            case 'pending': return 'En attente';
+            case 'cancelled': return 'Annulée';
+            default: return status;
         }
     }
+    function formatDate(isoString) {
+        return new Date(isoString).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
 
-    // Lancement
-    init();
+    async function displayTransactionHistory() {
+        const user = tg.initDataUnsafe?.user;
+        if (!user) return;
+        historyContainer.innerHTML = '<p>Chargement...</p>';
+        try {
+            const res = await fetch(`/api/miniapp/my-transactions/${user.id}`);
+            const txs = await res.json();
+            if (txs.length === 0) { historyContainer.innerHTML = '<p>Aucune transaction.</p>'; return; }
+            historyContainer.innerHTML = txs.map(tx => `
+                <div class="transaction-item">
+                    <div class="transaction-header">
+                        <span class="transaction-type">${tx.type === 'buy' ? 'Achat' : 'Vente'} ${tx.currencyTo}</span>
+                        <span class="transaction-date">${formatDate(tx.createdAt)}</span>
+                    </div>
+                    <div class="transaction-body">
+                        <span>${tx.amountToSend} ${tx.currencyFrom} ➔ ${tx.amountToReceive} ${tx.currencyTo}</span>
+                    </div>
+                    <div class="transaction-footer"><span class="status-badge status-${tx.status}">${formatStatus(tx.status)}</span></div>
+                </div>`).join('');
+        } catch (e) { historyContainer.innerHTML = '<p>Erreur historique.</p>'; }
+    }
+
+    async function displayReferralInfo() {
+        const settings = window.atexSettings;
+        const noCampaignView = document.getElementById('no-campaign-view');
+        const activeCampaignView = document.getElementById('active-campaign-view');
+
+        // GESTION DE L'AFFICHAGE SELON LA CAMPAGNE
+        if (!settings || !settings.referral_active) {
+            if(noCampaignView) noCampaignView.classList.remove('hidden');
+            if(activeCampaignView) activeCampaignView.classList.add('hidden');
+            return;
+        }
+
+        // Si campagne active
+        if(noCampaignView) noCampaignView.classList.add('hidden');
+        if(activeCampaignView) activeCampaignView.classList.remove('hidden');
+        
+        const promoTextEl = document.getElementById('referral-promo-text');
+        if(promoTextEl) promoTextEl.textContent = settings.referral_text || "Invitez vos amis !";
+
+        const user = tg.initDataUnsafe?.user;
+        if (!user) return;
+
+        try {
+            const res = await fetch(`/api/miniapp/referral-info/${user.id}`);
+            const info = await res.json();
+            const botUsername = "AtexOfficielBot"; 
+            const shortAppName = "atexly"; // Ton shortname configuré sur BotFather
+            
+            // --- CONSTRUCTION DU LIEN CAMPAGNE ---
+            // Le lien sera : t.me/Bot/app?startapp=CodeUser_IdCampagne
+            const campaignId = settings.referral_campaign_id || 'v1';
+            const fullCode = `${info.referralCode}_${campaignId}`;
+            
+            referralLinkSpan.textContent = `https://t.me/${botUsername}/${shortAppName}?startapp=${fullCode}`;
+            
+            // Mettre à jour les stats
+            totalEarningsP.textContent = `${(info.referralEarnings || 0).toFixed(2)} USDT`;
+            referralCountP.textContent = info.referralCount || 0;
+            
+            // Mettre à jour la liste (Fonction helper existante dans ton code)
+            const renderList = (list, containerId, headerId) => {
+                const container = document.getElementById(containerId);
+                const headerSpan = document.querySelector(`#${headerId} span`);
+                if(headerSpan) headerSpan.textContent = `(${list.length})`;
+                if(container) container.innerHTML = list.length ? list.map(r => `<p class="referral-item">👤 ${r.name}</p>`).join('') : '<p class="referral-item-empty">Aucun filleul.</p>';
+            };
+            
+            if(info.activeReferrals) renderList(info.activeReferrals, 'active-referrals-list', 'active-referrals-header');
+
+        } catch (e) { console.error("Erreur affichage parrainage", e); }
+    }
+
+    // --- LOGIQUE RETRAIT (Inchangée) ---
+    const showWithdrawalBtn = document.getElementById('show-withdrawal-btn');
+    const withdrawalModal = document.getElementById('withdrawal-modal');
+    if (showWithdrawalBtn) {
+        showWithdrawalBtn.addEventListener('click', () => withdrawalModal.classList.remove('hidden'));
+        document.getElementById('close-withdrawal-modal').addEventListener('click', () => withdrawalModal.classList.add('hidden'));
+        
+        // Logique radio (USDT vs MM)
+        document.querySelectorAll('input[name="withdrawal-method"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const isUsdt = e.target.value === 'usdt';
+                document.getElementById('withdrawal-usdt-group').classList.toggle('hidden', !isUsdt);
+                document.getElementById('withdrawal-mm-group').classList.toggle('hidden', isUsdt);
+            });
+        });
+
+        document.getElementById('submit-withdrawal-btn').addEventListener('click', async () => {
+            const user = tg.initDataUnsafe?.user;
+            if(!user) return;
+            const amount = parseFloat(document.getElementById('withdrawal-amount').value);
+            const method = document.querySelector('input[name="withdrawal-method"]:checked').value;
+            
+            // ... (Validations simples) ...
+            if(amount < 5) return tg.showAlert("Min 5 USDT");
+
+            let details = {};
+            if(method === 'usdt') details = { walletAddress: document.getElementById('withdrawal-wallet').value };
+            else details = { provider: document.getElementById('withdrawal-mm-provider').value, phone: document.getElementById('withdrawal-phone').value };
+
+            try {
+                const res = await fetch('/api/miniapp/request-withdrawal', {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ telegramId: user.id, telegramUsername: user.username, amount, method, details })
+                });
+                const d = await res.json();
+                tg.showAlert(d.message, () => withdrawalModal.classList.add('hidden'));
+            } catch(e) { tg.showAlert("Erreur retrait"); }
+        });
+    }
+
+    // --- INITIALISATION ---
+    async function initializeApp() {
+        // --- 1. VÉRIFICATION GLOBALE (Maintenance & Config) ---
+        try {
+            const settingsRes = await fetch('/api/settings');
+            const settings = await settingsRes.json();
+
+            // SÉCURITÉ : Si maintenance active, on bloque tout
+            if (settings.maintenance_mode) {
+                document.getElementById('maintenance-screen').classList.remove('hidden');
+                document.getElementById('splash-screen').classList.add('hidden');
+                return; // ON ARRÊTE TOUT ICI
+            }
+
+            // On stocke la config pour l'utiliser ailleurs
+            window.atexSettings = settings;
+
+        } catch (e) {
+            console.error("Erreur chargement settings", e);
+        }
+        // --- FIN VÉRIFICATION ---
+        await performUserCheckIn();
+        await fetchPrices(); // Charge la config et construit le menu
+        
+        const user = tg.initDataUnsafe?.user;
+        if (user) userGreetingDiv.innerHTML = `<h2>Bonjour, ${user.first_name} ! 👋</h2>`;
+        
+        document.getElementById('splash-screen').classList.add('hidden');
+        document.getElementById('main-content').classList.remove('hidden');
+        document.getElementById('nav-bar').classList.remove('hidden');
+        
+        // Navigation Tabs
+        const navButtons = document.querySelectorAll('nav button');
+        const pages = document.querySelectorAll('.page');
+        navButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const pageId = btn.dataset.page;
+                if(pageId === 'profile') displayTransactionHistory();
+                if(pageId === 'earn') displayReferralInfo();
+                
+                navButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                pages.forEach(p => p.classList.toggle('active', p.id === pageId));
+            });
+        });
+
+        switchMode('buy');
+    }
+
+    initializeApp();
 });
