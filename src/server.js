@@ -1833,18 +1833,46 @@ app.post('/api/admin/withdrawals/:id/reject', verifyAdminToken, async (req, res)
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 app.post('/api/admin/broadcast', verifyAdminToken, async (req, res) => {
-    const { message, imageUrl, buttonText, buttonUrl } = req.body;
+    const { message, imageUrl, buttonText, buttonUrl, isTest } = req.body;
 
     if (!message) return res.status(400).json({ message: "Le message est vide." });
 
-    // Répondre immédiatement à l'admin pour ne pas bloquer le navigateur
+    // --- MODE TEST : ENVOI UNIQUE À L'ADMIN ---
+    if (isTest) {
+        try {
+            // On récupère les infos de l'admin connecté pour trouver son ID Telegram
+            const adminDoc = await db.collection('users').doc(req.user.userId).get();
+            if (!adminDoc.exists || !adminDoc.data().telegramId) {
+                return res.status(400).json({ message: "Votre compte Admin n'est pas lié à un ID Telegram. Lancez le bot avec votre compte perso pour tester." });
+            }
+
+            const targetId = adminDoc.data().telegramId;
+            let reply_markup = {};
+            if (buttonText && buttonUrl) {
+                reply_markup = { inline_keyboard: [[{ text: buttonText, url: buttonUrl }]] };
+            }
+
+            if (imageUrl) {
+                await miniAppBot.sendPhoto(targetId, imageUrl, { caption: message, reply_markup });
+            } else {
+                await miniAppBot.sendMessage(targetId, message, { reply_markup });
+            }
+
+            return res.status(200).json({ message: "Test envoyé ! Vérifiez vos messages privés." });
+
+        } catch (error) {
+            console.error("Erreur Test Broadcast:", error);
+            return res.status(500).json({ message: "Erreur lors de l'envoi du test." });
+        }
+    }
+
+    // --- MODE DIFFUSION (VRAI ENVOI) ---
+    // Répondre immédiatement à l'admin
     res.status(200).json({ message: "Diffusion démarrée en arrière-plan ! Vous recevrez un rapport quand ce sera fini." });
 
-    // --- DÉMARRAGE DU PROCESSUS D'ENVOI (EN BACKGROUND) ---
     (async () => {
         console.log("📢 Démarrage de la diffusion...");
         try {
-            // 1. Récupérer tous les utilisateurs avec un ID Telegram valide
             const usersSnapshot = await db.collection('users').get();
             const targets = [];
             usersSnapshot.forEach(doc => {
@@ -1852,19 +1880,13 @@ app.post('/api/admin/broadcast', verifyAdminToken, async (req, res) => {
                 if (d.telegramId) targets.push(d.telegramId);
             });
 
-            // On dédoublonne les IDs (au cas où)
             const uniqueTargets = [...new Set(targets)];
-            console.log(`📢 Cible : ${uniqueTargets.length} utilisateurs.`);
-
-            // 2. Préparer le clavier (Bouton)
+            
             let reply_markup = {};
             if (buttonText && buttonUrl) {
-                reply_markup = {
-                    inline_keyboard: [[{ text: buttonText, url: buttonUrl }]]
-                };
+                reply_markup = { inline_keyboard: [[{ text: buttonText, url: buttonUrl }]] };
             }
 
-            // 3. Boucle d'envoi (Avec pause pour éviter le blocage Telegram)
             let successCount = 0;
             let failureCount = 0;
 
@@ -1878,25 +1900,12 @@ app.post('/api/admin/broadcast', verifyAdminToken, async (req, res) => {
                     successCount++;
                 } catch (err) {
                     failureCount++;
-                    // Erreur fréquente : "Forbidden: bot was blocked by the user"
-                    if (err.response && err.response.statusCode === 403) {
-                        // Optionnel : Marquer l'utilisateur comme inactif dans la DB
-                    }
                 }
-                
-                // ⏳ PAUSE DE SÉCURITÉ : 50ms entre chaque message (environ 20 msgs/seconde)
-                await sleep(50);
+                await sleep(50); // Pause anti-ban
             }
 
-            // 4. Rapport final (Envoyé à l'admin sur Telegram)
-            const reportMsg = `
-📊 **RAPPORT DE DIFFUSION**
-✅ Succès : ${successCount}
-❌ Échecs : ${failureCount} (Bloqués/Inconnus)
-📢 Total visé : ${uniqueTargets.length}
-            `;
+            const reportMsg = `📊 **RAPPORT DE DIFFUSION**\n✅ Succès : ${successCount}\n❌ Échecs : ${failureCount}\n📢 Total visé : ${uniqueTargets.length}`;
             await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, reportMsg, { parse_mode: 'Markdown' });
-            console.log("📢 Diffusion terminée.");
 
         } catch (error) {
             console.error("Erreur critique Broadcast:", error);

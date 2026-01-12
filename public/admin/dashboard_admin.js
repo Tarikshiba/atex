@@ -463,9 +463,74 @@ document.addEventListener('DOMContentLoaded', () => {
     const broadcastForm = document.getElementById('broadcast-form');
     const broadcastFeedback = document.getElementById('broadcast-feedback');
     const broadcastBtn = document.getElementById('broadcast-submit-btn');
+    const broadcastTestBtn = document.getElementById('broadcast-test-btn'); // Nouveau
+
+    // --- FONCTION D'ENVOI COMMUNE ---
+    const sendBroadcast = async (isTest = false) => {
+        const message = document.getElementById('broadcast-message').value;
+        if (!message) {
+            alert("Veuillez écrire un message.");
+            return;
+        }
+
+        // Confirmation différente selon le mode
+        if (!isTest) {
+            if (!confirm("⚠️ ATTENTION : Vous allez envoyer ce message à TOUS les utilisateurs.\n\nConfirmer l'envoi ?")) return;
+        }
+
+        // UI Loading
+        const btnToDisable = isTest ? broadcastTestBtn : broadcastBtn;
+        const originalText = btnToDisable.innerHTML;
+        btnToDisable.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+        btnToDisable.disabled = true;
+        if (isTest) broadcastBtn.disabled = true; else broadcastTestBtn.disabled = true; // Bloquer l'autre bouton aussi
+        
+        broadcastFeedback.textContent = '';
+
+        const payload = {
+            message: message,
+            imageUrl: document.getElementById('broadcast-image').value || null,
+            buttonText: document.getElementById('broadcast-btn-text').value || null,
+            buttonUrl: document.getElementById('broadcast-btn-url').value || null,
+            isTest: isTest // On dit au serveur que c'est un test
+        };
+
+        try {
+            const res = await fetch('/api/admin/broadcast', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                broadcastFeedback.className = 'text-green-500 text-center text-sm font-bold mt-2';
+                broadcastFeedback.textContent = `✅ ${data.message}`;
+                if (!isTest) broadcastForm.reset(); // On vide le form seulement si c'est la vraie diffusion
+            } else {
+                broadcastFeedback.className = 'text-red-500 text-center text-sm font-bold mt-2';
+                broadcastFeedback.textContent = `❌ Erreur : ${data.message}`;
+            }
+        } catch (error) {
+            broadcastFeedback.textContent = "❌ Erreur de connexion.";
+        } finally {
+            btnToDisable.innerHTML = originalText;
+            broadcastTestBtn.disabled = false;
+            broadcastBtn.disabled = false;
+        }
+    };
 
     if (broadcastForm) {
-        broadcastForm.addEventListener('submit', async (e) => {
+        // Clic sur "Tester"
+        broadcastTestBtn.addEventListener('click', () => sendBroadcast(true));
+
+        // Clic sur "Envoyer" (Submit du formulaire)
+        broadcastForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            sendBroadcast(false);
+        });
+    }
             e.preventDefault();
 
             // Confirmation de sécurité
@@ -509,7 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    
+
     // --- INITIALISATION ---
     fetchPendingTransactions();
     fetchWithdrawals();
