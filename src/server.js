@@ -1837,28 +1837,42 @@ app.post('/api/admin/broadcast', verifyAdminToken, async (req, res) => {
 
     if (!message) return res.status(400).json({ message: "Le message est vide." });
 
-    // --- MODE TEST : ENVOI UNIQUE À L'ADMIN ---
+    // --- MODE TEST : ENVOI AUX ADMINS DU .ENV ---
     if (isTest) {
         try {
-            // On récupère les infos de l'admin connecté pour trouver son ID Telegram
-            const adminDoc = await db.collection('users').doc(req.user.userId).get();
-            if (!adminDoc.exists || !adminDoc.data().telegramId) {
-                return res.status(400).json({ message: "Votre compte Admin n'est pas lié à un ID Telegram. Lancez le bot avec votre compte perso pour tester." });
+            // 1. Récupérer la liste des IDs admins depuis le .env
+            const adminIds = (process.env.TELEGRAM_ADMIN_IDS || '').split(',').map(id => id.trim()).filter(id => id);
+
+            if (adminIds.length === 0) {
+                return res.status(400).json({ message: "Aucun ID Admin trouvé dans la configuration (.env)." });
             }
 
-            const targetId = adminDoc.data().telegramId;
+            // 2. Préparer le message
             let reply_markup = {};
             if (buttonText && buttonUrl) {
                 reply_markup = { inline_keyboard: [[{ text: buttonText, url: buttonUrl }]] };
             }
 
-            if (imageUrl) {
-                await miniAppBot.sendPhoto(targetId, imageUrl, { caption: message, reply_markup });
-            } else {
-                await miniAppBot.sendMessage(targetId, message, { reply_markup });
+            // 3. Envoyer à chaque admin de la liste
+            let successCount = 0;
+            for (const targetId of adminIds) {
+                try {
+                    if (imageUrl) {
+                        await miniAppBot.sendPhoto(targetId, imageUrl, { caption: message, reply_markup });
+                    } else {
+                        await miniAppBot.sendMessage(targetId, message, { reply_markup });
+                    }
+                    successCount++;
+                } catch (e) {
+                    console.error(`Echec envoi test à l'admin ${targetId}:`, e.message);
+                }
             }
 
-            return res.status(200).json({ message: "Test envoyé ! Vérifiez vos messages privés." });
+            if (successCount === 0) {
+                return res.status(500).json({ message: "Échec de l'envoi du test (vérifiez si les admins ont démarré le bot)." });
+            }
+
+            return res.status(200).json({ message: `Test envoyé à ${successCount} administrateur(s) !` });
 
         } catch (error) {
             console.error("Erreur Test Broadcast:", error);
