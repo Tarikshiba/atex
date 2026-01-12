@@ -69,9 +69,8 @@
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
             <h2 class="text-xl font-semibold mb-6 text-purple-400"><i class="fas fa-cogs"></i> Paramètres Généraux</h2>
             
-            <form id="general-settings-form" class="space-y-6">
+           <form id="general-settings-form" class="space-y-6">
                 <div class="grid md:grid-cols-2 gap-8">
-                    
                     <div class="bg-gray-900 p-4 rounded-lg border border-gray-600">
                         <div class="flex justify-between items-center mb-2">
                             <label class="font-bold text-red-400 text-lg">🔴 Mode Maintenance</label>
@@ -80,7 +79,7 @@
                                 <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                             </label>
                         </div>
-                        <p class="text-xs text-gray-400">Si activé, le Bot et la Mini App afficheront "Mise à jour en cours".</p>
+                        <p class="text-xs text-gray-400">Si activé, le Bot affiche "Mise à jour".</p>
                     </div>
 
                     <div class="bg-gray-900 p-4 rounded-lg border border-gray-600">
@@ -91,21 +90,79 @@
                                 <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                             </label>
                         </div>
-                        <p class="text-xs text-gray-400">Active ou désactive l'accès à la section "Gagner" pour les utilisateurs.</p>
+                        <p class="text-xs text-gray-400">Active/Désactive la section "Gagner".</p>
                     </div>
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Texte Promotionnel (Section Gagner)</label>
-                    <input type="text" id="referral-text-input" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-purple-500 text-white outline-none" placeholder="Ex: Nouvelle campagne : Gagnez 500 FCFA par ami !">
+                <div class="bg-gray-900 p-6 rounded-lg border border-yellow-600">
+                    <h3 class="text-yellow-400 font-bold mb-4 flex items-center gap-2"><i class="fas fa-chart-line"></i> Configuration des Commissions</h3>
+                    
+                    <div class="grid grid-cols-3 gap-6 mb-6">
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Marge de Référence (FCFA)</label>
+                            <input type="number" id="ref-margin-input" class="w-full p-2 bg-gray-800 rounded border border-gray-600 text-white font-mono" placeholder="30">
+                            <p class="text-[10px] text-gray-500 mt-1">Sert de base au calcul (ex: 30 FCFA * Volume USDT).</p>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Min. Retrait (USDT)</label>
+                            <input type="number" id="min-withdrawal-input" class="w-full p-2 bg-gray-800 rounded border border-gray-600 text-white font-mono" placeholder="5">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Texte Promo</label>
+                            <input type="text" id="referral-text-input" class="w-full p-2 bg-gray-800 rounded border border-gray-600 text-white" placeholder="Gagnez jusqu'à 12% des frais !">
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-3 gap-4 text-center">
+                        <div class="bg-gray-800 p-3 rounded border border-gray-700">
+                            <h4 class="text-green-400 font-bold text-sm mb-2">Niveau 1 🥉</h4>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="text-[10px] text-gray-500">Filleuls Actifs</label>
+                                    <input type="number" id="l1-threshold" class="w-full p-1 bg-gray-900 text-center text-sm rounded border border-gray-600" placeholder="5">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-gray-500">% Com</label>
+                                    <input type="number" id="l1-percent" class="w-full p-1 bg-gray-900 text-center text-sm rounded border border-gray-600" placeholder="5">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-800 p-3 rounded border border-gray-700">
+                            <h4 class="text-blue-400 font-bold text-sm mb-2">Niveau 2 🥈</h4>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="text-[10px] text-gray-500">Filleuls Actifs</label>
+                                    <input type="number" id="l2-threshold" class="w-full p-1 bg-gray-900 text-center text-sm rounded border border-gray-600" placeholder="20">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-gray-500">% Com</label>
+                                    <input type="number" id="l2-percent" class="w-full p-1 bg-gray-900 text-center text-sm rounded border border-gray-600" placeholder="8">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-800 p-3 rounded border border-gray-700">
+                            <h4 class="text-purple-400 font-bold text-sm mb-2">Niveau 3 🥇</h4>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="text-[10px] text-gray-500">Filleuls Actifs</label>
+                                    <input type="number" id="l3-threshold" class="w-full p-1 bg-gray-900 text-center text-sm rounded border border-gray-600" placeholder="50">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-gray-500">% Com</label>
+                                    <input type="number" id="l3-percent" class="w-full p-1 bg-gray-900 text-center text-sm rounded border border-gray-600" placeholder="12">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="flex justify-end">
                     <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded transition shadow-lg">
-                        Enregistrer les paramètres
+                        Enregistrer la Configuration
                     </button>
                 </div>
             </form>
+
         </div>
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
             <div class="flex justify-between items-center mb-4">

@@ -13,8 +13,6 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 // --- NOUVELLE CONFIGURATION DES RÉCOMPENSES ET PAIEMENTS ---
-const REFERRAL_REWARD_USDT = 0.04; // Récompense de 25 FCFA (~0.04 USDT)
-const ACTIVATION_REFERRAL_COUNT = 2; // Nombre de filleuls requis pour devenir actif
 
 const PAYMENT_DETAILS = {
     'moov-togo': { number: '+22898216099', country: 'Togo', name: 'Moov Money (Togo)' },
@@ -72,46 +70,7 @@ const supportBot = new TelegramBot(process.env.TELEGRAM_SUPPORT_BOT_TOKEN, { pol
  * Vérifie si un utilisateur (le "filleul") doit devenir actif et récompense son parrain.
  * @param {FirebaseFirestore.DocumentSnapshot} filleulDocSnapshot - Le snapshot du document Firestore du filleul.
  */
-async function processActivationAndReward(filleulDocSnapshot) {
-    const filleulData = filleulDocSnapshot.data();
-    
-    // 1. On ne traite jamais un filleul déjà actif
-    if (filleulData.isActive) {
-        console.log(`[Activation] L'utilisateur ${filleulData.telegramId} est déjà actif. On arrête.`);
-        return;
-    }
 
-    // 2. On vérifie si le filleul a un parrain
-    const parrainCode = filleulData.referredBy;
-    if (!parrainCode) {
-        console.log(`[Activation] L'utilisateur ${filleulData.telegramId} n'a pas de parrain. On arrête.`);
-        return;
-    }
-    
-    console.log(`[Activation] Traitement pour ${filleulData.telegramId}, parrainé par le code ${parrainCode}.`);
-
-    try {
-        // 3. Marquer le filleul comme "actif"
-        await filleulDocSnapshot.ref.update({ isActive: true });
-        console.log(`[Activation] L'utilisateur ${filleulData.telegramId} est maintenant marqué comme ACTIF.`);
-
-        // 4. Trouver et récompenser le parrain
-        const parrainSnapshot = await db.collection('users').where('referralCode', '==', parrainCode).limit(1).get();
-        
-        if (!parrainSnapshot.empty) {
-            const parrainDoc = parrainSnapshot.docs[0];
-            await parrainDoc.ref.update({
-                referralEarnings: admin.firestore.FieldValue.increment(REFERRAL_REWARD_USDT)
-            });
-            console.log(`[Récompense] ${REFERRAL_REWARD_USDT.toFixed(2)} USDT versés au parrain ${parrainDoc.data().telegramId}.`);
-        } else {
-            console.log(`[Récompense] Avertissement: Le parrain avec le code ${parrainCode} est introuvable.`);
-        }
-
-    } catch (error) {
-        console.error(`[Activation] Erreur lors du traitement pour ${filleulData.telegramId}:`, error);
-    }
-}
 
 console.log('Bot de la Mini App démarré et en écoute...');
 
@@ -231,7 +190,7 @@ adminBot.on('callback_query', async (callbackQuery) => {
     const [action, id] = data.split(':');
     adminBot.answerCallbackQuery(callbackQuery.id);
 
-  // --- LOGIQUE POUR LES TRANSACTIONS CLASSIQUES ---
+// --- LOGIQUE POUR LES TRANSACTIONS CLASSIQUES (V3 - REVENUE SHARE) ---
 if (action === 'approve' || action === 'cancel') {
     try {
         const transactionRef = db.collection('transactions').doc(id);
@@ -239,43 +198,121 @@ if (action === 'approve' || action === 'cancel') {
         if (!doc.exists) return adminBot.sendMessage(msg.chat.id, "Erreur : Transaction introuvable.");
 
         const txData = doc.data();
+        if (txData.status !== 'pending') return adminBot.sendMessage(msg.chat.id, "⚠️ Transaction déjà traitée.");
+
         const status = action === 'approve' ? 'completed' : 'cancelled';
         const emoji = action === 'approve' ? '✅ Approuvée' : '❌ Annulée';
 
         await transactionRef.update({ status });
         
-        // --- DÉCLENCHEUR D'ACTIVATION N°1 : PREMIÈRE TRANSACTION COMPLÉTÉE ---
+        // =========================================================
+        // SYSTÈME DE PARRAINAGE : REVENUE SHARE (PROFIT)
+        // =========================================================
         if (action === 'approve') {
-            const userSnapshot = await db.collection('users').where('telegramId', '==', txData.telegramId).limit(1).get();
+            const usersRef = db.collection('users');
+            const userSnapshot = await usersRef.where('telegramId', '==', txData.telegramId).limit(1).get();
+            
             if (!userSnapshot.empty) {
                 const userDoc = userSnapshot.docs[0];
-                if (!userDoc.data().isActive) {
-                    console.log(`[Déclencheur] Transaction complétée pour l'utilisateur ${txData.telegramId}. Vérification d'activation...`);
-                    await processActivationAndReward(userDoc);
+                const userData = userDoc.data();
+
+                // 1. Marquer l'utilisateur comme ACTIF s'il ne l'était pas
+                // Un utilisateur est actif dès qu'il fait une transaction réussie
+                if (!userData.isActive) {
+                    await userDoc.ref.update({ isActive: true });
+                    // Si parrain, incrémenter son compteur de filleuls ACTIFS
+                    if (userData.referredBy) {
+                        const referrerSnapshot = await usersRef.where('referralCode', '==', userData.referredBy).limit(1).get();
+                        if (!referrerSnapshot.empty) {
+                             // On incrémente le nombre de filleuls actifs du parrain
+                             await referrerSnapshot.docs[0].ref.update({
+                                 activeReferralCount: admin.firestore.FieldValue.increment(1)
+                             });
+                        }
+                    }
+                }
+
+                // 2. CALCUL DES GAINS POUR LE PARRAIN (Revenue Share)
+                if (userData.referredBy) {
+                    const configDoc = await db.collection('configuration').doc('general').get();
+                    const config = configDoc.exists ? configDoc.data() : {};
+                    
+                    // --- RÉCUPÉRATION DES RÉGLAGES CONFIGURÉS ---
+                    const margin = config.referral_margin || 30; // Défaut 30 si non configuré
+                    const l1 = config.levels?.l1 || { threshold: 5, percent: 5 };
+                    const l2 = config.levels?.l2 || { threshold: 20, percent: 8 };
+                    const l3 = config.levels?.l3 || { threshold: 50, percent: 12 };
+
+                    const referrerSnapshot = await usersRef.where('referralCode', '==', userData.referredBy).limit(1).get();
+                    
+                    if (!referrerSnapshot.empty) {
+                        const referrerDoc = referrerSnapshot.docs[0];
+                        const referrerData = referrerDoc.data();
+                        
+                        // Nombre de filleuls actifs (Fallback sur referralCount total si pas encore de activeReferralCount)
+                        let activeCount = referrerData.activeReferralCount || referrerData.referralCount || 0;
+
+                        // DÉTERMINATION DU NIVEAU
+                        let percent = 0;
+                        let levelName = "";
+                        
+                        if (activeCount >= l3.threshold) { percent = l3.percent; levelName = "Expert (Niv 3)"; }
+                        else if (activeCount >= l2.threshold) { percent = l2.percent; levelName = "Avancé (Niv 2)"; }
+                        else if (activeCount >= l1.threshold) { percent = l1.percent; levelName = "Actif (Niv 1)"; }
+                        
+                        // Si le parrain est qualifié (Niveau 1 atteint)
+                        if (percent > 0) {
+                            // CALCUL DU VOLUME EN USDT (Approximatif basé sur montant FCFA)
+                            // On convertit le montant FCFA de la transaction en USDT pour avoir une base de volume
+                            let amountFCFA = 0;
+                            if (txData.type === 'buy') amountFCFA = txData.amountToSend; 
+                            else amountFCFA = txData.amountToReceive;
+
+                            // On utilise un taux fixe de division pour estimer le volume USDT (ex: 650)
+                            // Volume USDT = Montant FCFA / 650
+                            const estimatedVolumeUSDT = amountFCFA / 650;
+
+                            // CALCUL DU GAIN
+                            // Marge Totale Théorique = Volume USDT * Marge Configurée (ex: 30)
+                            const totalMarginFCFA = estimatedVolumeUSDT * margin;
+                            
+                            // Part du parrain en FCFA
+                            const referrerShareFCFA = totalMarginFCFA * (percent / 100);
+                            
+                            // CONVERSION DU GAIN EN USDT (Pour créditer le solde)
+                            // On divise par 650 (ou le taux de vente actuel)
+                            const ratesDoc = await db.collection('configuration').doc('manual_rates').get();
+                            const usdtSellRate = ratesDoc.exists ? (ratesDoc.data().rates?.usdt?.sell || 650) : 650;
+                            
+                            const referrerShareUSDT = referrerShareFCFA / usdtSellRate;
+
+                            if (referrerShareUSDT > 0.001) { 
+                                await referrerDoc.ref.update({
+                                    referralEarnings: admin.firestore.FieldValue.increment(referrerShareUSDT)
+                                });
+
+                                // Notification Parrain
+                                const msgParrain = `💰 **GAIN AFFILIATION (${levelName})**\n\nUn filleul a fait une transaction.\n💵 Base Marge : ${totalMarginFCFA.toFixed(0)} FCFA\n💎 **Votre part (${percent}%) : +${referrerShareUSDT.toFixed(4)} USDT**`;
+                                try { await miniAppBot.sendMessage(referrerData.telegramId, msgParrain, { parse_mode: 'Markdown' }); } catch(e) {}
+                            }
+                        }
+                    }
                 }
             }
         }
-        // --- FIN DU DÉCLENCHEUR ---
-        
-        // --- NOUVEAU BLOC : NOTIFICATION À L'UTILISATEUR ---
+        // ================= FIN SYSTÈME PARRAINAGE =================
+
+        // Notification Utilisateur (inchangé)
         let userMessage;
         const txTypeText = txData.type === 'buy' ? 'd\'achat' : 'de vente';
+        const supportUsername = "AtexlySupportBot";
 
         if (action === 'approve') {
-            userMessage = `🎉 Bonne nouvelle ! Votre transaction ${txTypeText} de ${txData.amountToSend.toLocaleString('fr-FR')} ${txData.currencyFrom} a été **approuvée**.`;
-        } else { // action === 'cancel'
-           
-          const supportUsername = "AtexlySupportBot"; // ✅ Corrigé
-          userMessage = `⚠️ Information : Votre transaction ${txTypeText} de ${txData.amountToSend.toLocaleString('fr-FR')} ${txData.currencyFrom} a été **annulée**. Pour en connaître la raison, veuillez contacter notre service client : @${supportUsername}`;
+            userMessage = `🎉 Bonne nouvelle ! Votre transaction ${txTypeText} de ${txData.amountToSend.toLocaleString('fr-FR')} ${txData.currencyFrom || 'FCFA'} a été **approuvée**.`;
+        } else { 
+            userMessage = `⚠️ Information : Votre transaction ${txTypeText} a été **annulée**. Pour en connaître la raison, veuillez contacter : @${supportUsername}`;
         }
-
-        try {
-            await miniAppBot.sendMessage(txData.telegramId, userMessage, { parse_mode: 'Markdown' });
-            console.log(`Notification de statut envoyée à l'utilisateur ${txData.telegramId}.`);
-        } catch (error) {
-            console.error(`Impossible d'envoyer la notification à l'utilisateur ${txData.telegramId}:`, error.message);
-        }
-        // --- FIN DU NOUVEAU BLOC ---
+        try { await miniAppBot.sendMessage(txData.telegramId, userMessage, { parse_mode: 'Markdown' }); } catch (e) {}
 
         const originalMessage = msg.text;
         const updatedMessage = `${escapeMarkdownV2(originalMessage)}\n\n*STATUT : ${emoji} par ${escapeMarkdownV2(adminUser.first_name)}*`;
@@ -286,7 +323,7 @@ if (action === 'approve' || action === 'cancel') {
         });
     } catch (error) {
         console.error("Erreur (callback transaction):", error);
-        adminBot.sendMessage(msg.chat.id, "Une erreur est survenue (transaction).");
+        adminBot.sendMessage(msg.chat.id, "Une erreur est survenue.");
     }
 }
     
@@ -1253,6 +1290,7 @@ app.post('/api/miniapp/user-check-in', async (req, res) => {
                 referralCode: newReferralCode,
                 referredBy: referredByCode || null,
                 referralCount: 0,
+                activeReferralCount: 0, // Nouveau champ pour le comptage V2
                 isActive: false,
                 referralEarnings: 0,
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
@@ -1260,31 +1298,18 @@ app.post('/api/miniapp/user-check-in', async (req, res) => {
             await usersRef.add(newUser);
             console.log(`Nouvel utilisateur ${user.id} créé avec le code ${newReferralCode}.`);
 
-           if (referredByCode) {
-    wasReferred = true;
-    const referrerSnapshot = await usersRef.where('referralCode', '==', referredByCode).limit(1).get();
+            if (referredByCode) {
+                wasReferred = true;
+                const referrerSnapshot = await usersRef.where('referralCode', '==', referredByCode).limit(1).get();
 
-    if (!referrerSnapshot.empty) {
-        const referrerDoc = referrerSnapshot.docs[0];
-        
-        // On incrémente le compteur du parrain
-        await referrerDoc.ref.update({
-            referralCount: admin.firestore.FieldValue.increment(1)
-        });
-        
-        // --- DÉCLENCHEUR D'ACTIVATION N°2 : LE PARRAIN ATTEINT 2 FILLEULS ---
-        // On récupère la donnée la plus fraîche du parrain après l'incrémentation
-        const updatedReferrerDoc = await referrerDoc.ref.get();
-        const updatedReferrerData = updatedReferrerDoc.data();
-        
-        // Si le parrain atteint le seuil requis ET n'est pas déjà actif
-        if (updatedReferrerData.referralCount >= ACTIVATION_REFERRAL_COUNT && !updatedReferrerData.isActive) {
-            console.log(`[Déclencheur] Le parrain ${updatedReferrerData.telegramId} a atteint ${ACTIVATION_REFERRAL_COUNT} filleuls. Vérification d'activation...`);
-            await processActivationAndReward(updatedReferrerDoc);
-        }
-        // --- FIN DU DÉCLENCHEUR ---
-    }
-}
+                if (!referrerSnapshot.empty) {
+                    const referrerDoc = referrerSnapshot.docs[0];
+                    // On incrémente juste le compteur total (l'actif se fera lors du paiement)
+                    await referrerDoc.ref.update({
+                        referralCount: admin.firestore.FieldValue.increment(1)
+                    });
+                }
+            }
         } else {
              console.log(`Check-in: Utilisateur existant ${user.id}.`);
         }
@@ -1296,7 +1321,6 @@ app.post('/api/miniapp/user-check-in', async (req, res) => {
                 const firstName = user.first_name ? `, ${escapeMarkdownV2(user.first_name)}` : '';
                 const welcomeMessage = `🎉 Bienvenue sur ATEX${firstName} \\! 🎉\n\nVous avez rejoint notre communauté grâce à une invitation\\. Explorez nos services pour acheter et vendre des cryptos en toute simplicité\\.`;
                 await miniAppBot.sendMessage(user.id, welcomeMessage, { parse_mode: 'MarkdownV2' });
-                console.log(`Message de bienvenue de parrainage envoyé à ${user.id}.`);
             } catch (botError) {
                 console.error(`Impossible d'envoyer le message de bienvenue à ${user.id}: ${botError.message}`);
             }
@@ -1332,9 +1356,15 @@ app.post('/api/miniapp/request-withdrawal', async (req, res) => {
         const userData = userDoc.data();
         const currentEarnings = userData.referralEarnings || 0;
 
-        // --- VÉRIFICATION DE SÉCURITÉ CÔTÉ SERVEUR ---
-        if (amount < 5) {
-            return res.status(400).json({ message: "Le montant minimum de retrait est de 5 USDT." });
+        
+       // --- RÉCUPÉRATION DU SEUIL CONFIGURÉ ---
+        const configDoc = await db.collection('configuration').doc('general').get();
+        const config = configDoc.exists ? configDoc.data() : {};
+        const minWithdrawal = config.min_withdrawal || 5; // Défaut 5 USDT si non configuré
+
+        // --- VÉRIFICATION DE SÉCURITÉ ---
+        if (amount < minWithdrawal) {
+            return res.status(400).json({ message: `Le montant minimum de retrait est de ${minWithdrawal} USDT.` });
         }
         if (currentEarnings < amount) {
             return res.status(400).json({ message: "Fonds insuffisants. Vos gains ont peut-être changé." });

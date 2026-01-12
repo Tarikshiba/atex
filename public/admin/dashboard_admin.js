@@ -91,34 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // SECTION 2 & 3 : GESTION DYNAMIQUE CRYPTOS & TAUX
     // =========================================================
 
-   // A. Charger la configuration complète
-    async function loadConfiguration() {
-        try {
-            // 0. CHARGER LES PARAMÈTRES GÉNÉRAUX
-            const settingsRes = await fetch('/api/settings'); // Route publique
-            const settings = await settingsRes.json();
-            
-            // Appliquer aux inputs
-            if(maintenanceToggle) maintenanceToggle.checked = settings.maintenance_mode || false;
-            if(referralToggle) referralToggle.checked = settings.referral_active !== false;
-            if(referralTextInput) referralTextInput.value = settings.referral_text || '';
-
-            // 1. Charger la liste des cryptos
-            const cryptoRes = await fetch('/api/admin/cryptos', { headers: { 'Authorization': `Bearer ${token}` }});
-            activeCryptos = await cryptoRes.json();
-            
-            // 2. Charger les taux
-            const ratesRes = await fetch('/api/admin/pricing/rates', { headers: { 'Authorization': `Bearer ${token}` }});
-            const ratesData = await ratesRes.json();
-            const currentRates = ratesData.rates || {};
-
-            renderCryptoList();
-            renderRatesForm(currentRates);
-            
-        } catch (error) {
-            console.error("Erreur chargement config:", error);
-        }
-    }
 
     // B. Afficher le tableau des cryptos
     function renderCryptoList() {
@@ -282,7 +254,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // G. SAUVEGARDER LES PARAMÈTRES GÉNÉRAUX
+    // ===============================================
+    // SECTION : GESTION DES PARAMÈTRES & CONFIGURATION (V2)
+    // ===============================================
+    
+    // Sélection des inputs d'affiliation
+    const refMarginInput = document.getElementById('ref-margin-input');
+    const minWithdrawalInput = document.getElementById('min-withdrawal-input');
+    const l1Threshold = document.getElementById('l1-threshold');
+    const l1Percent = document.getElementById('l1-percent');
+    const l2Threshold = document.getElementById('l2-threshold');
+    const l2Percent = document.getElementById('l2-percent');
+    const l3Threshold = document.getElementById('l3-threshold');
+    const l3Percent = document.getElementById('l3-percent');
+
+    // Nouvelle fonction loadConfiguration unifiée
+    async function loadConfiguration() {
+        try {
+            console.log("Chargement de la configuration...");
+
+            // 1. CHARGER LES PARAMÈTRES GÉNÉRAUX & AFFILIATION
+            const settingsRes = await fetch('/api/settings');
+            const settings = await settingsRes.json();
+            
+            // Appliquer aux inputs "Toggle"
+            if(maintenanceToggle) maintenanceToggle.checked = settings.maintenance_mode || false;
+            if(referralToggle) referralToggle.checked = settings.referral_active !== false;
+            if(referralTextInput) referralTextInput.value = settings.referral_text || '';
+
+            // Appliquer aux inputs "Affiliation Avancée"
+            if(refMarginInput) refMarginInput.value = settings.referral_margin || 30;
+            if(minWithdrawalInput) minWithdrawalInput.value = settings.min_withdrawal || 5;
+            
+            // Niveaux
+            if(l1Threshold) l1Threshold.value = settings.levels?.l1?.threshold || 5;
+            if(l1Percent) l1Percent.value = settings.levels?.l1?.percent || 5;
+            
+            if(l2Threshold) l2Threshold.value = settings.levels?.l2?.threshold || 20;
+            if(l2Percent) l2Percent.value = settings.levels?.l2?.percent || 8;
+            
+            if(l3Threshold) l3Threshold.value = settings.levels?.l3?.threshold || 50;
+            if(l3Percent) l3Percent.value = settings.levels?.l3?.percent || 12;
+
+            // 2. CHARGER LA LISTE DES CRYPTOS
+            const cryptoRes = await fetch('/api/admin/cryptos', { headers: { 'Authorization': `Bearer ${token}` }});
+            activeCryptos = await cryptoRes.json();
+            renderCryptoList(); 
+
+            // 3. CHARGER LES TAUX MANUELS
+            const ratesRes = await fetch('/api/admin/pricing/rates', { headers: { 'Authorization': `Bearer ${token}` }});
+            const ratesData = await ratesRes.json();
+            const currentRates = ratesData.rates || {};
+            renderRatesForm(currentRates);
+
+        } catch (error) {
+            console.error("Erreur chargement config:", error);
+        }
+    }
+
+    // Gestionnaire de soumission du formulaire de paramètres
     if(settingsForm) {
         settingsForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -291,16 +321,25 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.textContent = "Sauvegarde...";
             submitBtn.disabled = true;
 
+            // Checkbox "Nouvelle Campagne" (optionnel)
             let startNewCampaign = false;
             if (referralToggle.checked) {
-                 startNewCampaign = confirm("Voulez-vous lancer une NOUVELLE CAMPAGNE (Saison) ?\n\n- OK : Oui, générer de nouveaux liens (les anciens expirent).\n- ANNULER : Non, garder la campagne actuelle.");
+                 // startNewCampaign = confirm("Lancer une nouvelle campagne ?"); // Décommenter si besoin
             }
 
             const settingsData = {
                 maintenance_mode: maintenanceToggle.checked,
                 referral_active: referralToggle.checked,
                 referral_text: referralTextInput.value.trim(),
-                new_campaign: startNewCampaign
+                new_campaign: startNewCampaign,
+                // Nouvelle Config Affiliation
+                referral_margin: parseFloat(refMarginInput.value) || 30,
+                min_withdrawal: parseFloat(minWithdrawalInput.value) || 5,
+                levels: {
+                    l1: { threshold: parseInt(l1Threshold.value)||5, percent: parseFloat(l1Percent.value)||5 },
+                    l2: { threshold: parseInt(l2Threshold.value)||20, percent: parseFloat(l2Percent.value)||8 },
+                    l3: { threshold: parseInt(l3Threshold.value)||50, percent: parseFloat(l3Percent.value)||12 }
+                }
             };
 
             try {
@@ -311,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (res.ok) {
-                    alert("✅ Paramètres mis à jour !");
+                    alert("✅ Configuration enregistrée !");
                 } else {
                     alert("❌ Erreur serveur.");
                 }
