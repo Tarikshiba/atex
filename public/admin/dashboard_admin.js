@@ -132,14 +132,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="px-4 py-3 text-white font-bold">${c.name}</td>
                 <td class="px-4 py-3"><span class="bg-gray-600 text-xs px-2 py-1 rounded">${c.network}</span></td>
                 <td class="px-4 py-3 font-mono text-xs text-gray-400 truncate max-w-xs" title="${c.walletAddress}">${c.walletAddress.substring(0, 15)}...</td>
-                <td class="px-4 py-3 text-right">
-                    <button onclick="deleteCrypto('${c.id}')" class="text-red-400 hover:text-red-200 transition">
+                <td class="px-4 py-3 text-right space-x-2">
+                    <button onclick="editCrypto('${c.id}')" class="text-blue-400 hover:text-blue-200 transition" title="Modifier">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="deleteCrypto('${c.id}')" class="text-red-400 hover:text-red-200 transition" title="Supprimer">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
             </tr>
         `).join('');
     }
+
+    // --- FONCTIONS MODALES (GLOBALES) ---
+    
+    // 1. Ouvrir en mode AJOUT
+    window.openAddModal = () => {
+        document.getElementById('add-crypto-form').reset(); // Vider le formulaire
+        document.getElementById('modal-title').textContent = "Ajouter une Crypto";
+        document.getElementById('new-id').disabled = false; // L'ID est modifiable
+        document.getElementById('new-id').classList.remove('bg-gray-700', 'cursor-not-allowed');
+        document.getElementById('add-crypto-modal').classList.remove('hidden');
+    };
+
+    // 2. Ouvrir en mode MODIFICATION
+    window.editCrypto = (id) => {
+        const crypto = activeCryptos.find(c => c.id === id);
+        if (!crypto) return;
+
+        // Remplir les champs
+        document.getElementById('new-id').value = crypto.id;
+        document.getElementById('new-name').value = crypto.name;
+        document.getElementById('new-symbol').value = crypto.symbol;
+        document.getElementById('new-network').value = crypto.network;
+        document.getElementById('new-wallet').value = crypto.walletAddress;
+        document.getElementById('new-market-key').value = crypto.marketKey || '';
+        document.getElementById('new-min-buy').value = crypto.minBuy || '';
+        document.getElementById('new-min-sell').value = crypto.minSell || '';
+
+        // UI : Bloquer l'ID (car c'est la clé primaire, on ne peut pas la changer sinon ça crée un doublon)
+        const idInput = document.getElementById('new-id');
+        idInput.disabled = true; 
+        idInput.classList.add('bg-gray-700', 'cursor-not-allowed');
+
+        // Changer le titre
+        document.getElementById('modal-title').textContent = `Modifier ${crypto.name}`;
+        
+        // Afficher
+        document.getElementById('add-crypto-modal').classList.remove('hidden');
+    };
 
     // C. Afficher le formulaire des taux (généré dynamiquement)
     function renderRatesForm(currentRates) {
