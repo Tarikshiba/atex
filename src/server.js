@@ -64,6 +64,8 @@ const upload = multer({ storage: storage });
 // On initialise DEUX bots distincts avec leurs propres tokens
 const adminBot = new TelegramBot(process.env.TELEGRAM_ADMIN_BOT_TOKEN, { polling: true }); // Pour les notifications
 const miniAppBot = new TelegramBot(process.env.TELEGRAM_MINI_APP_BOT_TOKEN, { polling: true }); // Pour la Mini App
+// --- BOT SUPPORT CLIENT (ATEX DESK) ---
+const supportBot = new TelegramBot(process.env.TELEGRAM_SUPPORT_BOT_TOKEN, { polling: true });
 
 // --- NOUVELLE FONCTION CENTRALE D'ACTIVATION ET DE RÉCOMPENSE ---
 /**
@@ -1822,6 +1824,146 @@ app.post('/api/admin/withdrawals/:id/reject', verifyAdminToken, async (req, res)
         res.status(500).json({ message: "Erreur serveur." });
     }
 });
+
+// ===============================================
+// SECTION 5 : SUPPORT CLIENT "ATEX DESK" (PHASE 3)
+// ===============================================
+
+// A. GESTION DES MESSAGES UTILISATEURS (DM -> GROUPE ADMIN)
+supportBot.on('message', async (msg) => {
+    // On ignore les messages qui viennent du groupe de support lui-même (pour éviter les boucles)
+    // Et on ignore les messages des bots
+    if (msg.chat.type !== 'private' || msg.from.is_bot) return;
+
+    const userId = msg.from.id;
+    const supportGroupId = process.env.TELEGRAM_SUPPORT_GROUP_ID;
+    const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+
+    try {
+        // 1. Chercher si l'utilisateur a déjà un Topic ouvert
+        const usersRef = db.collection('users');
+        const snapshot = await usersRef.where('telegramId', '==', userId).limit(1).get();
+        
+        let userDoc = null;
+        let supportTopicId = null;
+
+        if (!snapshot.empty) {
+            userDoc = snapshot.docs[0];
+            supportTopicId = userDoc.data().supportTopicId;
+        }
+
+        // 2. Si pas de Topic, on le crée
+        if (!supportTopicId) {
+            // Création du Topic sur Telegram
+            const topicName = `${msg.from.first_name || 'Client'} (${userId})`;
+            const topic = await supportBot.createForumTopic(supportGroupId, topicName);
+            supportTopicId = topic.message_thread_id;
+
+            // Sauvegarde du Topic ID en base de données
+            if (userDoc) {
+                await userDoc.ref.update({ supportTopicId: supportTopicId });
+            } else {
+                // Si l'utilisateur n'existe pas encore (visiteur), on le crée
+                await usersRef.add({
+                    telegramId: userId,
+                    telegramUsername: msg.from.username || '',
+                    supportTopicId: supportTopicId,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    isGuest: true // Marqueur pour dire que c'est un visiteur du support
+                });
+            }
+
+            // Envoyer une carte d'identité du client dans le nouveau Topic
+            const infoMsg = `
+🎫 **NOUVEAU TICKET SUPPORT**
+👤 **Client :** ${username}
+🆔 **ID :** \`${userId}\`
+--------------------------------
+_Le client attend votre réponse._
+            `;
+            await supportBot.sendMessage(supportGroupId, infoMsg, { 
+                message_thread_id: supportTopicId, 
+                parse_mode: 'Markdown' 
+            });
+        }
+
+        // 3. Transférer le message du client vers son Topic
+        // 'forwardMessage' garde la référence de l'expéditeur original
+        await supportBot.forwardMessage(supportGroupId, userId, msg.message_id, {
+            message_thread_id: supportTopicId
+        });
+
+    } catch (error) {
+        console.error("Erreur ATEX Desk (User -> Admin):", error.message);
+    }
+});
+
+// B. GESTION DES RÉPONSES ADMIN (GROUPE ADMIN -> DM UTILISATEUR)
+supportBot.on('message', async (msg) => {
+    // On écoute UNIQUEMENT les messages venant du Groupe Support
+    if (msg.chat.id.toString() !== process.env.TELEGRAM_SUPPORT_GROUP_ID) return;
+    
+    // On ignore les messages système (création de topic, épinglage...)
+    if (!msg.message_thread_id || msg.is_topic_message === false) return;
+    
+    // On ignore les messages qui sont des FORWARDS (pour éviter de renvoyer au client ce qu'il vient de dire)
+    if (msg.forward_from) return;
+
+    const topicId = msg.message_thread_id;
+
+    try {
+        // 1. Retrouver à qui appartient ce Topic
+        const usersRef = db.collection('users');
+        const snapshot = await usersRef.where('supportTopicId', '==', topicId).limit(1).get();
+
+        if (snapshot.empty) return; // Topic inconnu ou orphelin
+
+        const clientTelegramId = snapshot.docs[0].data().telegramId;
+
+        // 2. Gestion des COMMANDES RAPIDES (Snippets)
+        if (msg.text && msg.text.startsWith('/')) {
+            let responseText = null;
+
+            if (msg.text === '/rib' || msg.text === '/paiement') {
+                responseText = `
+💳 **Coordonnées de Paiement ATEX**
+
+🔸 **Orange Money (Sénégal) :**
+\`+221 78 680 01 12\`
+
+🌊 **Wave (Sénégal) :**
+\`+221 77 705 44 93\`
+
+🟡 **Moov (Togo) :**
+\`+228 98 21 60 99\`
+
+_Merci d'envoyer la preuve de paiement ici une fois effectué._
+                `;
+                // Confirmation côté Admin
+                await supportBot.sendMessage(msg.chat.id, "✅ Coordonnées envoyées.", { message_thread_id: topicId });
+            }
+            
+            else if (msg.text === '/close') {
+                await supportBot.closeForumTopic(msg.chat.id, topicId);
+                responseText = "✅ **Votre ticket a été fermé.**\nMerci d'avoir contacté le support ATEX. À bientôt !";
+            }
+
+            // Si c'était une commande, on envoie la réponse prédéfinie
+            if (responseText) {
+                return await supportBot.sendMessage(clientTelegramId, responseText, { parse_mode: 'Markdown' });
+            }
+        }
+
+        // 3. Sinon, c'est une réponse normale : On la copie au client
+        // 'copyMessage' envoie une copie PROPRE (sans "Transféré de...")
+        // Le client aura l'impression que le bot lui parle directement.
+        await supportBot.copyMessage(clientTelegramId, msg.chat.id, msg.message_id);
+
+    } catch (error) {
+        console.error("Erreur ATEX Desk (Admin -> User):", error.message);
+    }
+});
+
 // --- GESTION DES ROUTES FRONTEND ET DÉMARRAGE ---
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
