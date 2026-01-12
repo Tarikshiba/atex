@@ -21,6 +21,12 @@
             <h2 class="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">Transactions en attente</h2>
             <p class="text-gray-400">Chargement...</p>
         </div>
+       <div id="withdrawals-section" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8 border-l-4 border-blue-500">
+            <h2 class="text-xl font-semibold mb-4 text-blue-400"><i class="fas fa-money-bill-wave"></i> Demandes de Retrait</h2>
+            <div id="withdrawals-list" class="space-y-4">
+                <p class="text-gray-400 text-sm">Chargement des demandes...</p>
+            </div>
+        </div>
 
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
             <h2 class="text-xl font-semibold mb-6 text-purple-400"><i class="fas fa-cogs"></i> Paramètres Généraux</h2>
@@ -156,5 +162,20 @@
     </div>
 
     <script src="/admin/dashboard_admin.js"></script>
+
+    <div id="approve-withdrawal-modal" class="fixed inset-0 bg-black bg-opacity-90 hidden flex justify-center items-center z-[60] backdrop-blur-sm">
+        <div class="bg-gray-800 p-6 rounded-lg shadow-2xl w-full max-w-sm border border-green-500">
+            <h3 class="text-lg font-bold mb-4 text-green-400 text-center">Valider le Retrait</h3>
+            <p class="text-sm text-gray-300 mb-4 text-center">Entrez la preuve de paiement (Hash TX ou ID Transaction) pour l'envoyer à l'utilisateur.</p>
+            
+            <input type="hidden" id="approve-withdrawal-id">
+            <input type="text" id="withdrawal-proof" placeholder="Ex: TX123456789..." class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-green-500 text-white outline-none mb-4">
+            
+            <div class="flex justify-end space-x-2">
+                <button onclick="document.getElementById('approve-withdrawal-modal').classList.add('hidden')" class="px-4 py-2 bg-gray-600 rounded text-white text-sm">Annuler</button>
+                <button id="confirm-approve-btn" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-white font-bold text-sm">Envoyer & Valider</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

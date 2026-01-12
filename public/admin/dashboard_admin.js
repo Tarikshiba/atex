@@ -343,7 +343,122 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
+    // ===============================================
+    // SECTION 4 : GESTION DES RETRAITS (PHASE 2)
+    // ===============================================
+
+    const withdrawalsContainer = document.getElementById('withdrawals-list');
+    const approveModal = document.getElementById('approve-withdrawal-modal');
+    const proofInput = document.getElementById('withdrawal-proof');
+    const confirmApproveBtn = document.getElementById('confirm-approve-btn');
+    const approveIdInput = document.getElementById('approve-withdrawal-id');
+
+    const fetchWithdrawals = async () => {
+        try {
+            const res = await fetch('/api/admin/withdrawals/pending', { headers: { 'Authorization': `Bearer ${token}` } });
+            const withdrawals = await res.json();
+            renderWithdrawals(withdrawals);
+        } catch (e) {
+            withdrawalsContainer.innerHTML = '<p class="text-red-500">Erreur chargement retraits.</p>';
+        }
+    };
+
+    const renderWithdrawals = (list) => {
+        if (!list || list.length === 0) {
+            withdrawalsContainer.innerHTML = '<p class="text-gray-500 italic">Aucune demande de retrait en attente.</p>';
+            return;
+        }
+        
+        withdrawalsContainer.innerHTML = list.map(w => {
+            const date = new Date(w.createdAt._seconds * 1000).toLocaleString('fr-FR');
+            let methodIcon = w.method === 'usdt' ? '💎 USDT' : '📱 Mobile Money';
+            let detailsHtml = w.method === 'usdt' 
+                ? `<span class="font-mono bg-gray-900 px-1 rounded text-xs text-blue-300">${w.details.walletAddress}</span>`
+                : `<span class="text-yellow-300">${w.details.provider}</span> - ${w.details.phone}`;
+
+            return `
+            <div class="bg-gray-700 p-4 rounded-lg flex justify-between items-center border-l-4 border-blue-500 shadow-md">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="font-bold text-white text-lg">${w.amount} USDT</span>
+                        <span class="text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded-full">${methodIcon}</span>
+                    </div>
+                    <p class="text-sm text-gray-300 mb-1">👤 @${w.telegramUsername || 'Anonyme'} (ID: ${w.telegramId})</p>
+                    <p class="text-xs text-gray-400">📅 ${date}</p>
+                    <div class="mt-2 text-sm text-gray-200">
+                        ${detailsHtml}
+                    </div>
+                </div>
+                <div class="flex flex-col space-y-2 ml-4">
+                    <button onclick="openApproveModal('${w.id}')" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm shadow transition">
+                        <i class="fas fa-check"></i> Payer
+                    </button>
+                    <button onclick="rejectWithdrawal('${w.id}')" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm shadow transition">
+                        <i class="fas fa-times"></i> Rejeter
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+    };
+
+    // Fonctions Globales pour les boutons HTML
+    window.openApproveModal = (id) => {
+        approveIdInput.value = id;
+        proofInput.value = ''; // Reset
+        approveModal.classList.remove('hidden');
+    };
+
+    window.rejectWithdrawal = async (id) => {
+        const reason = prompt("Raison du rejet (sera envoyée à l'utilisateur) :", "Données incorrectes");
+        if (reason === null) return; // Annulé
+
+        try {
+            const res = await fetch(`/api/admin/withdrawals/${id}/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ reason })
+            });
+            if (res.ok) {
+                alert("Retrait rejeté et remboursé.");
+                fetchWithdrawals();
+            } else {
+                alert("Erreur serveur.");
+            }
+        } catch (e) { alert("Erreur connexion"); }
+    };
+
+    // Validation via Modale
+    confirmApproveBtn.addEventListener('click', async () => {
+        const id = approveIdInput.value;
+        const proof = proofInput.value.trim();
+        
+        if(!proof) return alert("Veuillez entrer une preuve de paiement (Hash ou Réf).");
+        
+        confirmApproveBtn.textContent = "Traitement...";
+        
+        try {
+            const res = await fetch(`/api/admin/withdrawals/${id}/approve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ proof })
+            });
+            
+            if (res.ok) {
+                approveModal.classList.add('hidden');
+                alert("✅ Paiement validé et notifié !");
+                fetchWithdrawals();
+            } else {
+                alert("Erreur lors de la validation.");
+            }
+        } catch (e) {
+            alert("Erreur connexion.");
+        } finally {
+            confirmApproveBtn.textContent = "Envoyer & Valider";
+        }
+    });
+
     // --- INITIALISATION ---
     fetchPendingTransactions();
+    fetchWithdrawals();
     loadConfiguration();
 });

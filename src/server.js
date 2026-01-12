@@ -1726,6 +1726,102 @@ app.get('/api/faqs', async (req, res) => {
   }
 });
 
+// ===============================================
+// NOUVELLES ROUTES ADMIN : GESTION DES RETRAITS (PHASE 2)
+// ===============================================
+
+// 1. Récupérer les retraits en attente
+app.get('/api/admin/withdrawals/pending', verifyAdminToken, async (req, res) => {
+    try {
+        const withdrawalsRef = db.collection('withdrawals').where('status', '==', 'pending').orderBy('createdAt', 'desc');
+        const snapshot = await withdrawalsRef.get();
+
+        if (snapshot.empty) return res.status(200).json([]);
+
+        const withdrawals = snapshot.docs.map(doc => {
+            const data = doc.data();
+            if (data.createdAt && data.createdAt.toDate) {
+                data.createdAt = { _seconds: data.createdAt.seconds };
+            }
+            return { id: doc.id, ...data };
+        });
+
+        res.status(200).json(withdrawals);
+    } catch (error) {
+        console.error("Erreur récupération retraits:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// 2. Approuver un retrait (Avec preuve de paiement)
+app.post('/api/admin/withdrawals/:id/approve', verifyAdminToken, async (req, res) => {
+    const { id } = req.params;
+    const { proof } = req.body; // Hash de transaction ou réf Mobile Money
+
+    try {
+        const withdrawalRef = db.collection('withdrawals').doc(id);
+        const doc = await withdrawalRef.get();
+        if (!doc.exists) return res.status(404).json({ message: "Retrait introuvable." });
+
+        const data = doc.data();
+        if (data.status !== 'pending') return res.status(400).json({ message: "Ce retrait n'est plus en attente." });
+
+        // Mise à jour statut + preuve
+        await withdrawalRef.update({ 
+            status: 'completed',
+            proof: proof || 'Non fournie',
+            processedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Notification Client
+        const message = `✅ *RETRAIT VALIDÉ !*\n\nVotre demande de ${data.amount} USDT a été traitée.\n\n📄 *Preuve/Réf :* \`${proof || 'N/A'}\`\n\nMerci de votre confiance !`;
+        try { await miniAppBot.sendMessage(data.telegramId, message, { parse_mode: 'Markdown' }); } catch (e) {}
+
+        res.status(200).json({ message: "Retrait validé." });
+    } catch (error) {
+        console.error("Erreur validation retrait:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// 3. Rejeter un retrait (Avec remboursement automatique)
+app.post('/api/admin/withdrawals/:id/reject', verifyAdminToken, async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    try {
+        const withdrawalRef = db.collection('withdrawals').doc(id);
+        const doc = await withdrawalRef.get();
+        if (!doc.exists) return res.status(404).json({ message: "Retrait introuvable." });
+
+        const data = doc.data();
+        if (data.status !== 'pending') return res.status(400).json({ message: "Ce retrait n'est plus en attente." });
+
+        // 1. Rembourser l'utilisateur
+        const userSnapshot = await db.collection('users').where('telegramId', '==', data.telegramId).limit(1).get();
+        if (!userSnapshot.empty) {
+            await userSnapshot.docs[0].ref.update({
+                referralEarnings: admin.firestore.FieldValue.increment(data.amount)
+            });
+        }
+
+        // 2. Marquer comme rejeté
+        await withdrawalRef.update({ 
+            status: 'cancelled',
+            rejectReason: reason || 'Non spécifiée',
+            processedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Notification Client
+        const message = `❌ *RETRAIT REJETÉ*\n\nVotre demande de ${data.amount} USDT a été refusée.\n💬 *Raison :* ${reason}\n\n💰 Vos fonds ont été remboursés sur votre solde.`;
+        try { await miniAppBot.sendMessage(data.telegramId, message, { parse_mode: 'Markdown' }); } catch (e) {}
+
+        res.status(200).json({ message: "Retrait rejeté et remboursé." });
+    } catch (error) {
+        console.error("Erreur rejet retrait:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
 // --- GESTION DES ROUTES FRONTEND ET DÉMARRAGE ---
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
