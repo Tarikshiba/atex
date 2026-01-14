@@ -1584,6 +1584,9 @@ app.post('/api/cron/update-prices', async (req, res) => {
     }
 });
 
+// ============================================================
+// ROUTE CONFIGURATION (CORRIGÉE : DEBUG + NORMALISATION PRIX)
+// ============================================================
 app.get('/api/config', async (req, res) => {
     try {
         // 1. Récupérer les prix en temps réel
@@ -1594,56 +1597,66 @@ app.get('/api/config', async (req, res) => {
         const manualRatesDoc = await db.collection('configuration').doc('manual_rates').get();
         const manualRates = manualRatesDoc.exists ? manualRatesDoc.data().rates : {};
 
-        // 3. (NOUVEAU) Récupérer la liste des cryptos actives
+        // 3. Récupérer la liste des cryptos actives
         const cryptoListDoc = await db.collection('configuration').doc('crypto_list').get();
         const activeCryptos = cryptoListDoc.exists ? (cryptoListDoc.data().list || []) : [];
 
-        // 4. Calculer les prix finaux (dynamique)
+        // --- MOUCHARD DE DEBUG (IMPORTANT POUR NOUS) ---
+        console.log("--- DEBUG PRIX ---");
+        console.log("Clés exactes en DB:", Object.keys(manualRates));
+        // -----------------------------------------------
+
+        // 4. Calculer les prix finaux
         const finalAtexPrices = {};
         
-        // On ne génère des prix QUE pour les cryptos qui sont dans notre liste active
-        // Si la liste est vide (premier lancement), on utilise les anciennes clés manuelles par sécurité ou on renvoie vide.
+        // On prépare une "carte" intelligente pour trouver les taux même si mal écrits
+        const normalize = (str) => str ? str.toString().toLowerCase().trim().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '') : '';
+        const rateMap = {};
+        
+        // On remplit la carte : clé normalisée -> données du taux
+        Object.keys(manualRates).forEach(realKey => {
+            rateMap[normalize(realKey)] = manualRates[realKey]; // Ex: "usdtbep20" -> Taux
+            rateMap[realKey] = manualRates[realKey];            // Ex: "USDT ( BEP 20 )" -> Taux
+        });
+
         const keysToProcess = activeCryptos.length > 0 ? activeCryptos.map(c => c.id) : Object.keys(manualRates);
 
-        // --- CORRECTIF : Normalisation pour correspondance robuste ---
-        const normalize = (str) => str ? str.toString().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
-        const normalizedRates = {};
-        Object.keys(manualRates).forEach(k => normalizedRates[normalize(k)] = manualRates[k]);
-        // -------------------------------------------------------------
-
-        keysToProcess.forEach(key => {
-            let marketKey = key;
+        keysToProcess.forEach(targetId => {
+            // A. Trouver le prix du marché (CoinMarketCap)
+            let marketKey = targetId;
             if (activeCryptos.length > 0) {
-                 const cryptoConf = activeCryptos.find(c => c.id === key);
+                 const cryptoConf = activeCryptos.find(c => c.id === targetId);
                  if (cryptoConf) marketKey = (cryptoConf.marketKey || cryptoConf.symbol).toLowerCase();
             } else {
-                 marketKey = key.split('_')[0]; 
+                 marketKey = targetId.split('_')[0]; 
             }
 
-            // Recherche intelligente : Clé exacte OU Clé normalisée
-            const rateData = manualRates[key] || normalizedRates[normalize(key)];
+            // B. Trouver le Taux Manuel (Correction ici !)
+            // On cherche la clé exacte OU la clé nettoyée
+            const rateData = rateMap[targetId] || rateMap[normalize(targetId)];
 
             if (rateData && realTimePrices[marketKey]) {
                 const priceInUSDT = realTimePrices[marketKey];
-                finalAtexPrices[key] = {
+                finalAtexPrices[targetId] = {
                     buy: priceInUSDT * (rateData.buy || 0),
                     sell: priceInUSDT * (rateData.sell || 0)
                 };
             } else {
-                console.warn(`[Prix Manquant] Impossible de calculer le prix pour : ${key} (MarketKey: ${marketKey})`);
+                // Si ça échoue, on affiche pourquoi dans les logs
+                if (!rateData) console.warn(`[Prix Manquant] Taux introuvable pour l'ID Dashboard: "${targetId}" (Cherché: "${normalize(targetId)}")`);
+                else if (!realTimePrices[marketKey]) console.warn(`[Prix Manquant] Prix marché introuvable pour: ${marketKey}`);
             }
         });
         
         res.status(200).json({ 
             atexPrices: finalAtexPrices,
-            availableCryptos: activeCryptos // C'est ici que la magie opère pour le frontend
+            availableCryptos: activeCryptos 
         });
 
     } catch (error) {
-        console.error("Erreur lors de la construction de la configuration des prix:", error);
-        // On relance le worker au cas où les prix temps réel seraient manquants
-        updateMarketPrices().catch(console.error);
-        res.status(500).json({ message: "Erreur de configuration des prix. Veuillez réessayer dans un instant." });
+        console.error("Erreur Config Prix:", error);
+        updateMarketPrices().catch(console.error); // Tentative de relance
+        res.status(500).json({ message: "Erreur config prix." });
     }
 });
 
