@@ -1605,24 +1605,32 @@ app.get('/api/config', async (req, res) => {
         // Si la liste est vide (premier lancement), on utilise les anciennes clés manuelles par sécurité ou on renvoie vide.
         const keysToProcess = activeCryptos.length > 0 ? activeCryptos.map(c => c.id) : Object.keys(manualRates);
 
+        // --- CORRECTIF : Normalisation pour correspondance robuste ---
+        const normalize = (str) => str ? str.toString().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+        const normalizedRates = {};
+        Object.keys(manualRates).forEach(k => normalizedRates[normalize(k)] = manualRates[k]);
+        // -------------------------------------------------------------
+
         keysToProcess.forEach(key => {
-            // Trouver le symbole pour chercher le prix marché (ex: 'btc' pour l'ID 'btc_bep20')
-            // Si on utilise la nouvelle liste, on prend 'marketKey' ou 'symbol', sinon on devine.
             let marketKey = key;
             if (activeCryptos.length > 0) {
                  const cryptoConf = activeCryptos.find(c => c.id === key);
                  if (cryptoConf) marketKey = (cryptoConf.marketKey || cryptoConf.symbol).toLowerCase();
             } else {
-                 // Fallback pour compatibilité ancienne config
                  marketKey = key.split('_')[0]; 
             }
 
-            if (manualRates[key] && realTimePrices[marketKey]) {
+            // Recherche intelligente : Clé exacte OU Clé normalisée
+            const rateData = manualRates[key] || normalizedRates[normalize(key)];
+
+            if (rateData && realTimePrices[marketKey]) {
                 const priceInUSDT = realTimePrices[marketKey];
                 finalAtexPrices[key] = {
-                    buy: priceInUSDT * (manualRates[key].buy || 0),
-                    sell: priceInUSDT * (manualRates[key].sell || 0)
+                    buy: priceInUSDT * (rateData.buy || 0),
+                    sell: priceInUSDT * (rateData.sell || 0)
                 };
+            } else {
+                console.warn(`[Prix Manquant] Impossible de calculer le prix pour : ${key} (MarketKey: ${marketKey})`);
             }
         });
         

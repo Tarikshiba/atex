@@ -60,6 +60,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const amount = parseFloat(amountToSendInput.value) || 0;
         const selectedId = cryptoSelect.value;
         
+        // Debug: Vérifier pourquoi le prix pourrait manquer
+        if (!atexPrices[selectedId]) {
+            console.warn(`Prix introuvable pour l'ID: "${selectedId}". Prix disponibles:`, Object.keys(atexPrices));
+        }
+
         // Si pas de prix ou pas de crypto sélectionnée
         if (amount === 0 || !atexPrices[selectedId]) {
             const initialCurrency = currentMode === 'buy' ? getCryptoSymbol(selectedId) : 'FCFA';
