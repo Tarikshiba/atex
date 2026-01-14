@@ -1524,53 +1524,71 @@ app.post('/api/user/kyc-request', verifyToken, upload.fields([
     }
 });
 
-// ================= LOGIQUE DU WORKER (V5.1 - COINMARKETCAP ROBUSTE) =================
+// ================= LOGIQUE DU WORKER (V6 - 100% DYNAMIQUE) =================
 async function updateMarketPrices() {
-    console.log("Le worker (CoinMarketCap) de mise à jour des prix démarre...");
+    console.log("🔄 WORKER : Démarrage mise à jour dynamique...");
     try {
-        const coinIds = '1,1027,825,1839,1958,52,3890,11419'; // BTC, ETH, USDT, BNB, TRX, XRP, MATIC, TON
-        const url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest';
+        // 1. Récupérer la liste de TOUTES les cryptos configurées dans le Dashboard
+        const configDoc = await db.collection('configuration').doc('crypto_list').get();
+        const cryptos = configDoc.exists ? (configDoc.data().list || []) : [];
 
-        const response = await axios.get(url, {
-            params: { id: coinIds, convert: 'USDT' },
-            headers: { 'X-CMC_PRO_API_KEY': process.env.COINMARKETCAP_API_KEY }
-        });
-
-        const prices = response.data.data;
-        const structuredPrices = {};
-
-        if (!prices || Object.keys(prices).length === 0) {
-            console.warn("Avertissement: L'API CoinMarketCap a renvoyé une réponse vide ou invalide.");
+        if (cryptos.length === 0) {
+            console.log("⚠️ Aucune crypto configurée, pas de mise à jour prix.");
             return;
         }
 
-        const assignPrice = (id, key) => {
-            const priceData = prices[id]?.quote?.USDT?.price;
-            if (typeof priceData === 'number') { // Vérifie que le prix n'est pas null
-                structuredPrices[key] = priceData;
+        // 2. Extraire les ID CoinMarketCap (cmcId)
+        // On ne garde que ceux qui ont un ID défini
+        const validCryptos = cryptos.filter(c => c.cmcId);
+        const cmcIds = [...new Set(validCryptos.map(c => c.cmcId))].join(','); // "825,5426,1..."
+
+        if (!cmcIds) {
+            console.warn("⚠️ Aucune crypto n'a d'ID CoinMarketCap configuré.");
+            return;
+        }
+
+        console.log(`📡 Appel CMC pour les IDs : ${cmcIds}`);
+        
+        const url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest';
+        const response = await axios.get(url, {
+            params: { id: cmcIds, convert: 'USDT' },
+            headers: { 'X-CMC_PRO_API_KEY': process.env.COINMARKETCAP_API_KEY },
+            timeout: 15000
+        });
+
+        const apiData = response.data.data;
+        const structuredPrices = {};
+
+        // 3. Mapping Intelligent : On associe le prix CMC à l'ID technique ATEX
+        // Ex: CMC renvoie prix pour ID 5426 -> On cherche qui a l'ID 5426 (Solana_sol) -> On sauve { "Solana_sol": 145.20 }
+        
+        validCryptos.forEach(crypto => {
+            const priceInfo = apiData[crypto.cmcId];
+            if (priceInfo && priceInfo.quote && priceInfo.quote.USDT) {
+                structuredPrices[crypto.id] = priceInfo.quote.USDT.price;
             }
-        };
+        });
 
-        assignPrice('1', 'btc');
-        assignPrice('1027', 'eth');
-        assignPrice('825', 'usdt');
-        assignPrice('1839', 'bnb');
-        assignPrice('1958', 'trx');
-        assignPrice('52', 'xrp');
-        assignPrice('3890', 'matic');
-        assignPrice('11419', 'ton');
+        // 4. Fallback de sécurité pour l'USDT (si présent dans la liste)
+        // On cherche une crypto qui s'appelle USDT ou a le symbole USDT
+        const usdtCrypto = cryptos.find(c => c.symbol === 'USDT' || c.id.includes('usdt'));
+        if (usdtCrypto && !structuredPrices[usdtCrypto.id]) {
+             console.warn("⚠️ Fallback: Prix USDT forcé à 1.00");
+             structuredPrices[usdtCrypto.id] = 1.00;
+        }
 
+        // 5. Sauvegarde
         const docRef = db.collection('market_data').doc('realtime_usdt_prices');
         await docRef.set({
             prices: structuredPrices,
             lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-            source: 'CoinMarketCap'
+            source: 'CoinMarketCap_Dynamic'
         });
-        console.log("Prix en USDT mis à jour avec succès dans Firestore via CoinMarketCap.");
+        
+        console.log("✅ PRIX DYNAMIQUES MIS À JOUR :", Object.keys(structuredPrices));
 
     } catch (error) {
-        console.error("Erreur dans le worker de mise à jour des prix (CoinMarketCap):", error.message);
-        throw error;
+        console.error("❌ ERREUR WORKER DYNAMIQUE:", error.message);
     }
 }
 
@@ -1585,11 +1603,11 @@ app.post('/api/cron/update-prices', async (req, res) => {
 });
 
 // ============================================================
-// ROUTE CONFIGURATION (CORRIGÉE : DEBUG + NORMALISATION PRIX)
+// ROUTE CONFIGURATION (V3 - NETTOYÉE & RAPIDE)
 // ============================================================
 app.get('/api/config', async (req, res) => {
     try {
-        // 1. Récupérer les prix en temps réel
+        // 1. Récupérer les prix (Désormais indexés par ID Crypto, ex: 'solana_sol')
         const realTimePricesDoc = await db.collection('market_data').doc('realtime_usdt_prices').get();
         const realTimePrices = realTimePricesDoc.exists ? realTimePricesDoc.data().prices : {};
 
@@ -1601,50 +1619,30 @@ app.get('/api/config', async (req, res) => {
         const cryptoListDoc = await db.collection('configuration').doc('crypto_list').get();
         const activeCryptos = cryptoListDoc.exists ? (cryptoListDoc.data().list || []) : [];
 
-        // --- MOUCHARD DE DEBUG (IMPORTANT POUR NOUS) ---
-        console.log("--- DEBUG PRIX ---");
-        console.log("Clés exactes en DB:", Object.keys(manualRates));
-        // -----------------------------------------------
-
         // 4. Calculer les prix finaux
         const finalAtexPrices = {};
         
-        // On prépare une "carte" intelligente pour trouver les taux même si mal écrits
-        const normalize = (str) => str ? str.toString().toLowerCase().trim().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '') : '';
-        const rateMap = {};
-        
-        // On remplit la carte : clé normalisée -> données du taux
-        Object.keys(manualRates).forEach(realKey => {
-            rateMap[normalize(realKey)] = manualRates[realKey]; // Ex: "usdtbep20" -> Taux
-            rateMap[realKey] = manualRates[realKey];            // Ex: "USDT ( BEP 20 )" -> Taux
-        });
+        // Pour chaque crypto active, on calcule le prix
+        activeCryptos.forEach(crypto => {
+            const cryptoId = crypto.id;
+            
+            // Le Worker a déjà fait le travail de lier ID CMC -> Crypto ID.
+            // Donc realTimePrices[cryptoId] contient DIRECTEMENT le prix USDT.
+            const priceInUSDT = realTimePrices[cryptoId];
+            
+            // On récupère le taux manuel
+            // On garde une mini-sécurité de nettoyage au cas où le dashboard envoie des clés sales
+            const cleanKey = cryptoId.trim(); 
+            const rateData = manualRates[cleanKey] || manualRates[cryptoId];
 
-        const keysToProcess = activeCryptos.length > 0 ? activeCryptos.map(c => c.id) : Object.keys(manualRates);
-
-        keysToProcess.forEach(targetId => {
-            // A. Trouver le prix du marché (CoinMarketCap)
-            let marketKey = targetId;
-            if (activeCryptos.length > 0) {
-                 const cryptoConf = activeCryptos.find(c => c.id === targetId);
-                 if (cryptoConf) marketKey = (cryptoConf.marketKey || cryptoConf.symbol).toLowerCase();
-            } else {
-                 marketKey = targetId.split('_')[0]; 
-            }
-
-            // B. Trouver le Taux Manuel (Correction ici !)
-            // On cherche la clé exacte OU la clé nettoyée
-            const rateData = rateMap[targetId] || rateMap[normalize(targetId)];
-
-            if (rateData && realTimePrices[marketKey]) {
-                const priceInUSDT = realTimePrices[marketKey];
-                finalAtexPrices[targetId] = {
+            if (priceInUSDT && rateData) {
+                finalAtexPrices[cryptoId] = {
                     buy: priceInUSDT * (rateData.buy || 0),
                     sell: priceInUSDT * (rateData.sell || 0)
                 };
             } else {
-                // Si ça échoue, on affiche pourquoi dans les logs
-                if (!rateData) console.warn(`[Prix Manquant] Taux introuvable pour l'ID Dashboard: "${targetId}" (Cherché: "${normalize(targetId)}")`);
-                else if (!realTimePrices[marketKey]) console.warn(`[Prix Manquant] Prix marché introuvable pour: ${marketKey}`);
+                // Si ça manque, on ne bloque pas tout, mais cette crypto affichera 0
+                // console.warn(`Prix incomplet pour ${cryptoId}: Marché=${!!priceInUSDT}, Taux=${!!rateData}`);
             }
         });
         
@@ -1655,7 +1653,6 @@ app.get('/api/config', async (req, res) => {
 
     } catch (error) {
         console.error("Erreur Config Prix:", error);
-        updateMarketPrices().catch(console.error); // Tentative de relance
         res.status(500).json({ message: "Erreur config prix." });
     }
 });

@@ -136,7 +136,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('new-symbol').value = crypto.symbol;
         document.getElementById('new-network').value = crypto.network;
         document.getElementById('new-wallet').value = crypto.walletAddress;
-        document.getElementById('new-market-key').value = crypto.marketKey || '';
+ // On remplace market-key par cmc-id
+        document.getElementById('new-cmc-id').value = crypto.cmcId || ''; 
         document.getElementById('new-min-buy').value = crypto.minBuy || '';
         document.getElementById('new-min-sell').value = crypto.minSell || '';
 
@@ -184,15 +185,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const symbol = document.getElementById('new-symbol').value.toUpperCase();
         
         const newCrypto = {
-            id: document.getElementById('new-id').value.trim(),
-            name: document.getElementById('new-name').value.trim(),
-            symbol: symbol,
-            network: document.getElementById('new-network').value.trim(),
-            walletAddress: document.getElementById('new-wallet').value.trim(),
-            marketKey: (document.getElementById('new-market-key').value.trim() || symbol).toLowerCase(),
-            minBuy: parseFloat(document.getElementById('new-min-buy').value) || 0,
-            minSell: parseFloat(document.getElementById('new-min-sell').value) || 0
-        };
+    id: document.getElementById('new-id').value.trim(),
+    name: document.getElementById('new-name').value.trim(),
+    symbol: symbol,
+    network: document.getElementById('new-network').value.trim(),
+    walletAddress: document.getElementById('new-wallet').value.trim(),
+    // marketKey supprimé, c'est obsolète
+    cmcId: document.getElementById('new-cmc-id').value.trim(), 
+    minBuy: parseFloat(document.getElementById('new-min-buy').value) || 0,
+    minSell: parseFloat(document.getElementById('new-min-sell').value) || 0
+};
 
         try {
             const res = await fetch('/api/admin/cryptos', {

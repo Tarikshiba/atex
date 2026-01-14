@@ -229,13 +229,15 @@
                     <input type="text" id="new-network" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none" required>
                 </div>
                 <div>
-                    <label for="new-wallet" class="text-xs text-gray-400 mb-1 block">Votre Adresse de Réception (Wallet)</label>
-                    <input type="text" id="new-wallet" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none font-mono text-sm" required>
-                </div>
-                <div>
-                    <label for="new-market-key" class="text-xs text-gray-500 mb-1 block">Clé CoinMarketCap (ex: btc, eth, usdt)</label>
-                    <input type="text" id="new-market-key" placeholder="Laisser vide si identique au symbole" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none text-sm">
-                </div>
+                    <div>
+                <label for="new-wallet" class="text-xs text-gray-400 mb-1 block">Votre Adresse de Réception (Wallet)</label>
+                <input type="text" id="new-wallet" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-teal-500 text-white outline-none font-mono text-sm" required>
+            </div>
+            <div>
+                <label for="new-cmc-id" class="text-xs text-yellow-400 mb-1 block font-bold">ID CoinMarketCap (CMC ID)</label>
+                <input type="number" id="new-cmc-id" placeholder="Ex: 825 (USDT), 5426 (SOL)" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-yellow-500 text-white outline-none text-sm" required>
+                  <p class="text-[10px] text-gray-500 mt-1">Trouvez l'ID sur CoinMarketCap. C'est obligatoire pour le prix automatique.</p>
+           </div>
 
                 <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-700">
                     <div>
