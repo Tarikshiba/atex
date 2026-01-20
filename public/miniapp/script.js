@@ -500,4 +500,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     init();
+
+    // Fonction utilitaire pour ouvrir les liens externes via Telegram
+    window.openLink = (url) => {
+        if (tg.openLink) {
+            tg.openLink(url);
+        } else {
+            window.open(url, '_blank');
+        }
+    };
 });

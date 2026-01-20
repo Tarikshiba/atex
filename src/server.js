@@ -1098,12 +1098,19 @@ ${userInfo}
         };
         await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, adminMessage, options);
 
-        // 3. Réponse au Client (Message Bot + HTTP)
+        // 3. Réponse au Client (Message Bot + HTTP) (MODIFIÉ NUIT)
+        
+        // --- DÉTECTION NUIT POUR MESSAGE ---
+        const currentHour = new Date().getUTCHours();
+        let nightWarning = "";
+        if (currentHour >= 22 || currentHour < 6) {
+            nightWarning = `\n\n🌙 **MODE NUIT ACTIF (22H-06H GMT)**\nNos agents se reposent. Votre commande est bien reçue et sera traitée en priorité dès 06H00 GMT. Merci de votre patience ! 💤`;
+        }
+        // -----------------------------------
+
         if (txData.type === 'buy') {
-            // --- MESSAGE ACHAT (VERSION LONGUE RESTAURÉE) ---
             const paymentInfo = PAYMENT_DETAILS[txData.paymentMethod];
             if (paymentInfo) {
-                // Note : Les caractères spéciaux (. ! - ( )) sont échappés pour MarkdownV2
                 const payMsg = `
 Bonjour ${safeUsername}\\! 👋
 Votre demande d'achat a bien été reçue et est en cours de traitement\\.
@@ -1114,19 +1121,19 @@ Pour finaliser, veuillez effectuer le paiement sur le numéro ci\\-dessous :
 📞 *Numéro :* \`${escapeMarkdownV2(paymentInfo.number)}\`
 _\\(Appuyez sur le numéro pour le copier facilement\\)_
 
+⏳ *Validité :* Vous avez 10 minutes pour payer\\.
+
 ⚠️ *Important :* Si vous n'êtes pas au ${escapeMarkdownV2(paymentInfo.country)}, assurez\\-vous d'effectuer un transfert international\\.
 
-Une fois le paiement effectué, notre équipe validera la transaction et vous recevrez vos cryptomonnaies\\.
-
 🚨 *Après avoir payé, merci d'envoyer la capture d'écran de la transaction à notre support client :* @AtexlySupportBot
+${escapeMarkdownV2(nightWarning)}
                 `;
                 try { await miniAppBot.sendMessage(txData.telegramId, payMsg, { parse_mode: 'MarkdownV2' }); } catch(e) { console.error("Erreur msg achat:", e.message); }
             }
             res.status(200).json({ message: "Commande reçue ! Instructions envoyées par message." });
 
         } else { 
-            // --- MESSAGE VENTE (CORRECTION DU BUG DE SYNTAXE) ---
-            
+            // VENTE
             const cryptoListDoc = await db.collection('configuration').doc('crypto_list').get();
             const cryptos = cryptoListDoc.exists ? (cryptoListDoc.data().list || []) : [];
             
@@ -1156,17 +1163,16 @@ Pour finaliser, envoyez vos cryptos ici :
 \`${safeTargetWallet}\`
 _\\(Appuyez pour copier\\)_
 
+⏳ *Validité :* Cette adresse est réservée 10 minutes\\.
+
 ⚠️ *Important :* Utilisez bien le réseau *${safeNetwork}*\\.
 🚨 *Envoyez la preuve \\(hash\\) au support :* @AtexlySupportBot
+${escapeMarkdownV2(nightWarning)}
             `;
-            // NOTE : J'ai mis \\(hash\\) ci-dessus. C'est ÇA qui va réparer le bug.
 
             try {
                 await miniAppBot.sendMessage(txData.telegramId, sellMessage, { parse_mode: 'MarkdownV2' });
-                console.log(`Instructions vente envoyées à ${txData.telegramId}`);
-            } catch(e) {
-                console.error(`Erreur envoi message vente :`, e.message);
-            }
+            } catch(e) { console.error(`Erreur envoi message vente :`, e.message); }
 
             res.status(200).json({ message: "Ordre initié ! L'adresse vous a été envoyée par message." });
         }
@@ -2148,6 +2154,59 @@ app.get('*', (req, res) => {
 //console.log("Exécution initiale du worker de prix au démarrage du serveur...");
 //updateMarketPrices();
 
+// ============================================================
+// 🛡️ LE GARDIEN (CRON JOB INTERNE) - ANTI-GHOSTING & NUIT
+// ============================================================
+setInterval(async () => {
+    try {
+        const now = new Date();
+        const currentHour = now.getUTCHours(); // Heure GMT
+
+        // --- RÈGLE 1 : MODE NUIT (22H - 06H GMT) ---
+        // La nuit, on ne touche à rien. On laisse les commandes en pending.
+        if (currentHour >= 22 || currentHour < 6) {
+            // console.log("🌙 Mode Nuit actif. Pas d'annulation automatique.");
+            return;
+        }
+
+        // --- RÈGLE 2 : MODE JOUR (Nettoyage automatique > 10 min) ---
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const Timestamp = admin.firestore.Timestamp;
+
+        // On cherche les transactions 'pending' vieilles de plus de 10 min
+        const snapshot = await db.collection('transactions')
+            .where('status', '==', 'pending')
+            .where('createdAt', '<=', Timestamp.fromDate(tenMinutesAgo))
+            .get();
+
+        if (snapshot.empty) return;
+
+        const batch = db.batch();
+        let cancelCount = 0;
+
+        snapshot.forEach(doc => {
+            const tx = doc.data();
+            // Sécurité supplémentaire : On ne touche pas aux retraits (source != MiniApp)
+            if (tx.source === 'MiniApp') {
+                batch.update(doc.ref, { status: 'cancelled', cancelledBy: 'system_timeout' });
+                
+                // Notification Client
+                const msg = `⏳ **Délai dépassé (10 min)**\n\nVotre commande de ${tx.amountToSend} a été annulée automatiquement car le paiement n'a pas été détecté à temps.\n\n_Si vous avez déjà payé, contactez le support immédiatement._`;
+                miniAppBot.sendMessage(tx.telegramId, msg, { parse_mode: 'Markdown' }).catch(e => {});
+                
+                cancelCount++;
+            }
+        });
+
+        if (cancelCount > 0) {
+            await batch.commit();
+            console.log(`🧹 Gardien: ${cancelCount} transactions expirées annulées.`);
+        }
+
+    } catch (error) {
+        console.error("Erreur Gardien:", error);
+    }
+}, 60 * 1000); // Exécution toutes les 60 secondes
 // Démarrage du serveur.
 app.listen(PORT, () => {
   console.log(`Le serveur ATEX écoute sur le port ${PORT}`);
