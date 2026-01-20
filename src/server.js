@@ -1114,13 +1114,20 @@ ${userInfo}
         };
         await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, adminMessage, options);
 
-        // 3. Réponse au Client (Message Bot + HTTP) (MODIFIÉ NUIT)
+        // 3. Réponse au Client (Message Bot + HTTP) (MODIFIÉ NUIT DYNAMIQUE)
         
-        // --- DÉTECTION NUIT POUR MESSAGE ---
-        const currentHour = new Date().getUTCHours();
+        // --- DÉTECTION NUIT POUR MESSAGE (VIA DB) ---
         let nightWarning = "";
-        if (currentHour >= 22 || currentHour < 6) {
-            nightWarning = `\n\n🌙 **MODE NUIT ACTIF (22H-06H GMT)**\nNos agents se reposent. Votre commande est bien reçue et sera traitée en priorité dès 06H00 GMT. Merci de votre patience ! 💤`;
+        try {
+            // On lit la config en temps réel pour savoir si le bouton est ON
+            const configDoc = await db.collection('configuration').doc('general').get();
+            const config = configDoc.exists ? configDoc.data() : {};
+            
+            if (config.night_mode_manual) {
+                nightWarning = `\n\n🌙 **MODE NUIT ACTIF**\nNos agents se reposent. Votre commande est bien reçue et sera traitée en priorité à notre retour. Merci de votre patience ! 💤`;
+            }
+        } catch (e) {
+            console.error("Erreur lecture config nuit:", e);
         }
         // -----------------------------------
 
@@ -2171,28 +2178,34 @@ app.get('*', (req, res) => {
 //updateMarketPrices();
 
 // ============================================================
-// 🛡️ LE GARDIEN (CRON JOB INTERNE) - ANTI-GHOSTING & NUIT
+// 🛡️ LE GARDIEN (CRON JOB INTELLIGENT) - ANTI-GHOSTING & NUIT
 // ============================================================
 setInterval(async () => {
     try {
-        const now = new Date();
-        const currentHour = now.getUTCHours(); // Heure GMT
+        // 1. Récupérer la configuration dynamique depuis le Dashboard
+        const configDoc = await db.collection('configuration').doc('general').get();
+        const config = configDoc.exists ? configDoc.data() : {};
+        
+        const isNightMode = config.night_mode_manual || false;
+        const timeoutMinutes = config.transaction_timeout || 10; // Défaut 10 min si vide
 
-        // --- RÈGLE 1 : MODE NUIT (22H - 06H GMT) ---
-        // La nuit, on ne touche à rien. On laisse les commandes en pending.
-        if (currentHour >= 22 || currentHour < 6) {
-            // console.log("🌙 Mode Nuit actif. Pas d'annulation automatique.");
+        // --- RÈGLE 1 : MODE NUIT ACTIF ---
+        // Si le bouton est ON dans le dashboard, on ne touche à rien.
+        if (isNightMode) {
+            // console.log("🌙 Mode Nuit (Manuel) actif. Le Gardien se repose.");
             return;
         }
 
-        // --- RÈGLE 2 : MODE JOUR (Nettoyage automatique > 10 min) ---
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+        // --- RÈGLE 2 : MODE JOUR (Nettoyage dynamique) ---
+        // On calcule la date limite en fonction du chiffre du Dashboard !
+        const timeoutMillis = timeoutMinutes * 60 * 1000;
+        const expirationDate = new Date(Date.now() - timeoutMillis);
         const Timestamp = admin.firestore.Timestamp;
 
-        // On cherche les transactions 'pending' vieilles de plus de 10 min
+        // On cherche les transactions 'pending' plus vieilles que la limite calculée
         const snapshot = await db.collection('transactions')
             .where('status', '==', 'pending')
-            .where('createdAt', '<=', Timestamp.fromDate(tenMinutesAgo))
+            .where('createdAt', '<=', Timestamp.fromDate(expirationDate))
             .get();
 
         if (snapshot.empty) return;
@@ -2202,12 +2215,16 @@ setInterval(async () => {
 
         snapshot.forEach(doc => {
             const tx = doc.data();
-            // Sécurité supplémentaire : On ne touche pas aux retraits (source != MiniApp)
+            // Sécurité : On ne touche pas aux retraits (source != MiniApp)
             if (tx.source === 'MiniApp') {
-                batch.update(doc.ref, { status: 'cancelled', cancelledBy: 'system_timeout' });
+                batch.update(doc.ref, { 
+                    status: 'cancelled', 
+                    cancelledBy: 'system_timeout',
+                    cancelledReason: `Délai dépassé (${timeoutMinutes} min)`
+                });
                 
                 // Notification Client
-                const msg = `⏳ **Délai dépassé (10 min)**\n\nVotre commande de ${tx.amountToSend} a été annulée automatiquement car le paiement n'a pas été détecté à temps.\n\n_Si vous avez déjà payé, contactez le support immédiatement._`;
+                const msg = `⏳ **Délai dépassé (${timeoutMinutes} min)**\n\nVotre commande de ${tx.amountToSend} a été annulée automatiquement car le paiement n'a pas été détecté à temps.\n\n_Si vous avez déjà payé, contactez le support immédiatement._`;
                 miniAppBot.sendMessage(tx.telegramId, msg, { parse_mode: 'Markdown' }).catch(e => {});
                 
                 cancelCount++;
@@ -2216,13 +2233,14 @@ setInterval(async () => {
 
         if (cancelCount > 0) {
             await batch.commit();
-            console.log(`🧹 Gardien: ${cancelCount} transactions expirées annulées.`);
+            console.log(`🧹 Gardien: ${cancelCount} transactions expirées annulées (Timeout réglé à ${timeoutMinutes} min).`);
         }
 
     } catch (error) {
         console.error("Erreur Gardien:", error);
     }
 }, 60 * 1000); // Exécution toutes les 60 secondes
+
 // Démarrage du serveur.
 app.listen(PORT, () => {
   console.log(`Le serveur ATEX écoute sur le port ${PORT}`);
