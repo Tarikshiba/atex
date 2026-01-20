@@ -683,8 +683,11 @@ app.get('/api/settings', async (req, res) => {
         const defaults = { 
             maintenance_mode: false, 
             referral_active: true, 
-            referral_campaign_id: 'campagne_v1', // ID par défaut
-            referral_text: "Gagnez 25 FCFA par ami invité !" 
+            referral_campaign_id: 'campagne_v1',
+            referral_text: "Gagnez 25 FCFA par ami invité !",
+            // NOUVELLES VALEURS PAR DÉFAUT
+            night_mode_manual: false,
+            transaction_timeout: 10 // Minutes
         };
         res.status(200).json(doc.exists ? { ...defaults, ...doc.data() } : defaults);
     } catch (error) {
@@ -695,18 +698,31 @@ app.get('/api/settings', async (req, res) => {
 // 2. Mettre à jour les paramètres (Route Admin)
 app.post('/api/admin/settings', verifyAdminToken, async (req, res) => {
     try {
-        const { maintenance_mode, referral_active, referral_text, new_campaign } = req.body;
+        // On récupère les nouveaux champs
+        const { 
+            maintenance_mode, 
+            referral_active, 
+            referral_text, 
+            new_campaign,
+            night_mode_manual, 
+            transaction_timeout,
+            referral_margin, min_withdrawal, levels 
+        } = req.body;
         
         const updateData = { 
             maintenance_mode, 
             referral_active, 
-            referral_text 
+            referral_text,
+            // Sauvegarde des nouveaux champs
+            night_mode_manual,
+            transaction_timeout,
+            referral_margin, 
+            min_withdrawal, 
+            levels
         };
 
-        // Si on demande une nouvelle campagne, on génère un nouvel ID unique
         if (new_campaign) {
             updateData.referral_campaign_id = `campagne_${nanoid(6)}`;
-            // Optionnel : On pourrait archiver les stats ici si tu veux
         }
 
         await db.collection('configuration').doc('general').set(updateData, { merge: true });

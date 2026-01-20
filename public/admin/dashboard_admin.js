@@ -257,10 +257,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ===============================================
-    // SECTION : GESTION DES PARAMÈTRES & CONFIGURATION (V2)
+    // SECTION : GESTION DES PARAMÈTRES & CONFIGURATION (V3 - NIGHT MODE)
     // ===============================================
     
-    // Sélection des inputs d'affiliation
+    // Sélection des inputs
     const refMarginInput = document.getElementById('ref-margin-input');
     const minWithdrawalInput = document.getElementById('min-withdrawal-input');
     const l1Threshold = document.getElementById('l1-threshold');
@@ -269,19 +269,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const l2Percent = document.getElementById('l2-percent');
     const l3Threshold = document.getElementById('l3-threshold');
     const l3Percent = document.getElementById('l3-percent');
+    
+    // Nouveaux Inputs Phase 1
+    const nightModeToggle = document.getElementById('night-mode-toggle');
+    const txTimeoutInput = document.getElementById('tx-timeout-input');
 
     // Nouvelle fonction loadConfiguration unifiée
     async function loadConfiguration() {
         try {
             console.log("Chargement de la configuration...");
 
-            // 1. CHARGER LES PARAMÈTRES GÉNÉRAUX & AFFILIATION
+            // 1. CHARGER LES PARAMÈTRES GÉNÉRAUX
             const settingsRes = await fetch('/api/settings');
             const settings = await settingsRes.json();
             
-            // Appliquer aux inputs "Toggle"
+            // Appliquer aux toggles
             if(maintenanceToggle) maintenanceToggle.checked = settings.maintenance_mode || false;
             if(referralToggle) referralToggle.checked = settings.referral_active !== false;
+            // --> NOUVEAU : Mode Nuit & Timeout
+            if(nightModeToggle) nightModeToggle.checked = settings.night_mode_manual || false;
+            if(txTimeoutInput) txTimeoutInput.value = settings.transaction_timeout || 10;
+            // ---------------------------------
+
             if(referralTextInput) referralTextInput.value = settings.referral_text || '';
 
             // Appliquer aux inputs "Affiliation Avancée"
@@ -323,18 +332,14 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.textContent = "Sauvegarde...";
             submitBtn.disabled = true;
 
-            // Checkbox "Nouvelle Campagne" (optionnel)
-            let startNewCampaign = false;
-            if (referralToggle.checked) {
-                 // startNewCampaign = confirm("Lancer une nouvelle campagne ?"); // Décommenter si besoin
-            }
-
             const settingsData = {
                 maintenance_mode: maintenanceToggle.checked,
                 referral_active: referralToggle.checked,
                 referral_text: referralTextInput.value.trim(),
-                new_campaign: startNewCampaign,
-                // Nouvelle Config Affiliation
+                // --> NOUVEAU : Sauvegarde Mode Nuit & Timeout
+                night_mode_manual: nightModeToggle.checked,
+                transaction_timeout: parseInt(txTimeoutInput.value) || 10,
+                // -------------------------------------------
                 referral_margin: parseFloat(refMarginInput.value) || 30,
                 min_withdrawal: parseFloat(minWithdrawalInput.value) || 5,
                 levels: {
