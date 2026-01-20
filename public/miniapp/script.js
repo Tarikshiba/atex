@@ -143,7 +143,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 availableCryptosList.forEach(crypto => {
                     const option = document.createElement('option');
                     option.value = crypto.id;
-                    option.text = `${crypto.name} (${crypto.symbol})`; // Ex: Solana (SOL)
+                    
+                    // --- CORRECTION SMART DISPLAY ---
+                    // Si le nom contient déjà le symbole (insensible à la casse), on ne l'ajoute pas.
+                    if (crypto.name.toLowerCase().includes(crypto.symbol.toLowerCase())) {
+                        option.text = crypto.name; 
+                    } else {
+                        option.text = `${crypto.name} (${crypto.symbol})`;
+                    }
+                    // ---------------------------------
+                    
                     cryptoSelect.add(option);
                 });
 
@@ -219,7 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const l3 = settings.levels?.l3 || { threshold: 50 };
 
             // Calcul du niveau actuel
-            // NOTE: Le backend renvoie activeReferrals (liste). On compte sa longueur.
             const activeCount = info.activeReferrals ? info.activeReferrals.length : 0;
             const activeCountDisplay = document.getElementById('active-referrals-count');
             if(activeCountDisplay) activeCountDisplay.textContent = `(${activeCount})`;
