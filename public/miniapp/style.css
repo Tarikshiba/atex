@@ -298,6 +298,7 @@ body {
 /* Modale */
 .modal-overlay {
     background-color: rgba(0,0,0,0.4);
+    -webkit-backdrop-filter: blur(4px); /* <--- LIGNE AJOUTÉE POUR IPHONE */
     backdrop-filter: blur(4px);
     z-index: 999;
 }
@@ -327,6 +328,7 @@ body {
 
 /* Backdrop sombre pour la nuit */
 #night-mode-modal.modal-overlay {
-    background-color: rgba(15, 23, 42, 0.8); /* Plus sombre et bleuté */
+    background-color: rgba(15, 23, 42, 0.8);
+    -webkit-backdrop-filter: blur(8px); /* <--- LIGNE AJOUTÉE POUR IPHONE */
     backdrop-filter: blur(8px);
 }
