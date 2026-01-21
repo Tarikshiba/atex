@@ -1114,22 +1114,31 @@ ${userInfo}
         };
         await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, adminMessage, options);
 
-        // 3. Réponse au Client (Message Bot + HTTP) (MODIFIÉ NUIT DYNAMIQUE)
+        // 3. Réponse au Client (Message Bot + HTTP) (MODIFIÉ DYNAMIQUE)
         
-        // --- DÉTECTION NUIT POUR MESSAGE (VIA DB) ---
+        // --- DÉTECTION NUIT & CONFIG TIMEOUT (VIA DB) ---
         let nightWarning = "";
+        let timeoutMinutes = 10; // Valeur par défaut de sécurité
+
         try {
-            // On lit la config en temps réel pour savoir si le bouton est ON
+            // On lit la config en temps réel
             const configDoc = await db.collection('configuration').doc('general').get();
             const config = configDoc.exists ? configDoc.data() : {};
             
+            // Gestion Nuit
             if (config.night_mode_manual) {
                 nightWarning = `\n\n🌙 **MODE NUIT ACTIF**\nNos agents se reposent. Votre commande est bien reçue et sera traitée en priorité à notre retour. Merci de votre patience ! 💤`;
             }
+            
+            // Gestion Délai
+            if (config.transaction_timeout) {
+                timeoutMinutes = config.transaction_timeout;
+            }
+
         } catch (e) {
-            console.error("Erreur lecture config nuit:", e);
+            console.error("Erreur lecture config:", e);
         }
-        // -----------------------------------
+        // ------------------------------------------------
 
         if (txData.type === 'buy') {
             const paymentInfo = PAYMENT_DETAILS[txData.paymentMethod];
@@ -1144,7 +1153,7 @@ Pour finaliser, veuillez effectuer le paiement sur le numéro ci\\-dessous :
 📞 *Numéro :* \`${escapeMarkdownV2(paymentInfo.number)}\`
 _\\(Appuyez sur le numéro pour le copier facilement\\)_
 
-⏳ *Validité :* Vous avez 10 minutes pour payer\\.
+⏳ *Validité :* Vous avez ${timeoutMinutes} minutes pour payer\\.
 
 ⚠️ *Important :* Si vous n'êtes pas au ${escapeMarkdownV2(paymentInfo.country)}, assurez\\-vous d'effectuer un transfert international\\.
 
@@ -1156,7 +1165,7 @@ ${escapeMarkdownV2(nightWarning)}
             res.status(200).json({ message: "Commande reçue ! Instructions envoyées par message." });
 
         } else { 
-            // VENTE
+            // VENTE (Code inchangé sauf le message)
             const cryptoListDoc = await db.collection('configuration').doc('crypto_list').get();
             const cryptos = cryptoListDoc.exists ? (cryptoListDoc.data().list || []) : [];
             
@@ -1186,7 +1195,7 @@ Pour finaliser, envoyez vos cryptos ici :
 \`${safeTargetWallet}\`
 _\\(Appuyez pour copier\\)_
 
-⏳ *Validité :* Cette adresse est réservée 10 minutes\\.
+⏳ *Validité :* Cette adresse est réservée ${timeoutMinutes} minutes\\.
 
 ⚠️ *Important :* Utilisez bien le réseau *${safeNetwork}*\\.
 🚨 *Envoyez la preuve \\(hash\\) au support :* @AtexlySupportBot

@@ -494,12 +494,22 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const sRes = await fetch('/api/settings');
             window.atexSettings = await sRes.json();
+            
+            // Maintenance
             if (window.atexSettings.maintenance_mode) {
                 document.getElementById('maintenance-screen').classList.remove('hidden');
                 document.getElementById('splash-screen').classList.add('hidden');
                 return;
             }
-        } catch(e) {}
+
+            // --- NOUVEAU : Mise à jour du délai d'affichage ---
+            const timeoutDisplay = document.getElementById('tx-timeout-display');
+            if (timeoutDisplay && window.atexSettings.transaction_timeout) {
+                timeoutDisplay.textContent = window.atexSettings.transaction_timeout;
+            }
+            // ---------------------------------------------------
+
+        } catch(e) { console.error("Settings Error", e); }
 
         // 2. Check-in & Prices
         const user = tg.initDataUnsafe?.user;
