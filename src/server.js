@@ -2178,12 +2178,10 @@ app.get('*', (req, res) => {
 //updateMarketPrices();
 
 // ============================================================
-// 🛡️ LE GARDIEN (MODE DEBUG - TRÈS BAVARD)
+// 🛡️ LE GARDIEN (CRON JOB PRODUCTION - SILENCIEUX)
 // ============================================================
 setInterval(async () => {
     try {
-        console.log("⏰ GARDIEN : Réveil..."); // Log 1
-
         // 1. Récupération Config
         const configDoc = await db.collection('configuration').doc('general').get();
         const config = configDoc.exists ? configDoc.data() : {};
@@ -2191,27 +2189,18 @@ setInterval(async () => {
         const isNightMode = config.night_mode_manual || false;
         const timeoutMinutes = config.transaction_timeout || 10;
 
-        console.log(`📋 Config lue -> Mode Nuit: ${isNightMode}, Délai: ${timeoutMinutes} min`); // Log 2
+        if (isNightMode) return; // Mode Nuit actif : Le Gardien ne touche à rien.
 
-        if (isNightMode) {
-            console.log("💤 Mode Nuit actif. Dodo.");
-            return;
-        }
-
-        // 2. Calcul du temps
+        // 2. Calcul du temps limite
         const timeoutMillis = timeoutMinutes * 60 * 1000;
         const expirationDate = new Date(Date.now() - timeoutMillis);
         const Timestamp = admin.firestore.Timestamp;
 
-        console.log(`🧮 Recherche transactions avant : ${expirationDate.toISOString()}`); // Log 3
-
-        // 3. La Requête
+        // 3. Recherche des transactions expirées
         const snapshot = await db.collection('transactions')
             .where('status', '==', 'pending')
             .where('createdAt', '<=', Timestamp.fromDate(expirationDate))
             .get();
-
-        console.log(`🔎 Résultat requête : ${snapshot.size} transactions trouvées.`); // Log 4
 
         if (snapshot.empty) return;
 
@@ -2220,9 +2209,7 @@ setInterval(async () => {
 
         snapshot.forEach(doc => {
             const tx = doc.data();
-            console.log(`👉 Analyse TX ${doc.id} - Source: ${tx.source}`); // Log 5
-
-            // Sécurité : On ne touche qu'aux transactions MiniApp
+            // Sécurité : On ne touche qu'aux transactions venant de la MiniApp
             if (tx.source === 'MiniApp') {
                 batch.update(doc.ref, { 
                     status: 'cancelled', 
@@ -2230,27 +2217,23 @@ setInterval(async () => {
                     cancelledReason: `Délai dépassé (${timeoutMinutes} min)`
                 });
                 
-                // Notification
-                const msg = `⏳ **Délai dépassé (${timeoutMinutes} min)**\n\nVotre commande a été annulée automatiquement.`;
-                miniAppBot.sendMessage(tx.telegramId, msg, { parse_mode: 'Markdown' }).catch(e => console.log("Erreur envoi msg bot:", e.message));
+                // Notification Client
+                const msg = `⏳ **Délai dépassé (${timeoutMinutes} min)**\n\nVotre commande a été annulée automatiquement car le délai est écoulé.`;
+                miniAppBot.sendMessage(tx.telegramId, msg, { parse_mode: 'Markdown' }).catch(e => {});
                 
                 cancelCount++;
-            } else {
-                console.log("⚠️ Ignoré : Mauvaise source.");
             }
         });
 
         if (cancelCount > 0) {
             await batch.commit();
-            console.log(`🧹 NETTOYAGE : ${cancelCount} transactions annulées !`);
-        } else {
-            console.log("🧹 Aucune transaction valide à annuler (peut-être mauvaise source ?).");
+            console.log(`🧹 Gardien: ${cancelCount} transaction(s) expirée(s) annulée(s).`);
         }
 
     } catch (error) {
-        console.error("❌ ERREUR CRITIQUE GARDIEN:", error);
+        console.error("Erreur Gardien:", error.message);
     }
-}, 60 * 1000); // Toutes les 60 secondes
+}, 60 * 1000); // Vérification toutes les 60 secondes
 
 // Démarrage du serveur.
 app.listen(PORT, () => {
