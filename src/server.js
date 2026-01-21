@@ -2178,35 +2178,40 @@ app.get('*', (req, res) => {
 //updateMarketPrices();
 
 // ============================================================
-// 🛡️ LE GARDIEN (CRON JOB INTELLIGENT) - ANTI-GHOSTING & NUIT
+// 🛡️ LE GARDIEN (MODE DEBUG - TRÈS BAVARD)
 // ============================================================
 setInterval(async () => {
     try {
-        // 1. Récupérer la configuration dynamique depuis le Dashboard
+        console.log("⏰ GARDIEN : Réveil..."); // Log 1
+
+        // 1. Récupération Config
         const configDoc = await db.collection('configuration').doc('general').get();
         const config = configDoc.exists ? configDoc.data() : {};
         
         const isNightMode = config.night_mode_manual || false;
-        const timeoutMinutes = config.transaction_timeout || 10; // Défaut 10 min si vide
+        const timeoutMinutes = config.transaction_timeout || 10;
 
-        // --- RÈGLE 1 : MODE NUIT ACTIF ---
-        // Si le bouton est ON dans le dashboard, on ne touche à rien.
+        console.log(`📋 Config lue -> Mode Nuit: ${isNightMode}, Délai: ${timeoutMinutes} min`); // Log 2
+
         if (isNightMode) {
-            // console.log("🌙 Mode Nuit (Manuel) actif. Le Gardien se repose.");
+            console.log("💤 Mode Nuit actif. Dodo.");
             return;
         }
 
-        // --- RÈGLE 2 : MODE JOUR (Nettoyage dynamique) ---
-        // On calcule la date limite en fonction du chiffre du Dashboard !
+        // 2. Calcul du temps
         const timeoutMillis = timeoutMinutes * 60 * 1000;
         const expirationDate = new Date(Date.now() - timeoutMillis);
         const Timestamp = admin.firestore.Timestamp;
 
-        // On cherche les transactions 'pending' plus vieilles que la limite calculée
+        console.log(`🧮 Recherche transactions avant : ${expirationDate.toISOString()}`); // Log 3
+
+        // 3. La Requête
         const snapshot = await db.collection('transactions')
             .where('status', '==', 'pending')
             .where('createdAt', '<=', Timestamp.fromDate(expirationDate))
             .get();
+
+        console.log(`🔎 Résultat requête : ${snapshot.size} transactions trouvées.`); // Log 4
 
         if (snapshot.empty) return;
 
@@ -2215,7 +2220,9 @@ setInterval(async () => {
 
         snapshot.forEach(doc => {
             const tx = doc.data();
-            // Sécurité : On ne touche pas aux retraits (source != MiniApp)
+            console.log(`👉 Analyse TX ${doc.id} - Source: ${tx.source}`); // Log 5
+
+            // Sécurité : On ne touche qu'aux transactions MiniApp
             if (tx.source === 'MiniApp') {
                 batch.update(doc.ref, { 
                     status: 'cancelled', 
@@ -2223,23 +2230,27 @@ setInterval(async () => {
                     cancelledReason: `Délai dépassé (${timeoutMinutes} min)`
                 });
                 
-                // Notification Client
-                const msg = `⏳ **Délai dépassé (${timeoutMinutes} min)**\n\nVotre commande de ${tx.amountToSend} a été annulée automatiquement car le paiement n'a pas été détecté à temps.\n\n_Si vous avez déjà payé, contactez le support immédiatement._`;
-                miniAppBot.sendMessage(tx.telegramId, msg, { parse_mode: 'Markdown' }).catch(e => {});
+                // Notification
+                const msg = `⏳ **Délai dépassé (${timeoutMinutes} min)**\n\nVotre commande a été annulée automatiquement.`;
+                miniAppBot.sendMessage(tx.telegramId, msg, { parse_mode: 'Markdown' }).catch(e => console.log("Erreur envoi msg bot:", e.message));
                 
                 cancelCount++;
+            } else {
+                console.log("⚠️ Ignoré : Mauvaise source.");
             }
         });
 
         if (cancelCount > 0) {
             await batch.commit();
-            console.log(`🧹 Gardien: ${cancelCount} transactions expirées annulées (Timeout réglé à ${timeoutMinutes} min).`);
+            console.log(`🧹 NETTOYAGE : ${cancelCount} transactions annulées !`);
+        } else {
+            console.log("🧹 Aucune transaction valide à annuler (peut-être mauvaise source ?).");
         }
 
     } catch (error) {
-        console.error("Erreur Gardien:", error);
+        console.error("❌ ERREUR CRITIQUE GARDIEN:", error);
     }
-}, 60 * 1000); // Exécution toutes les 60 secondes
+}, 60 * 1000); // Toutes les 60 secondes
 
 // Démarrage du serveur.
 app.listen(PORT, () => {
