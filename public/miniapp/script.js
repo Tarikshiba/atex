@@ -373,8 +373,8 @@ document.addEventListener('DOMContentLoaded', () => {
         calculate();
     });
 
-    submitBtn.addEventListener('click', async () => {
-        // Logique de soumission (identique, juste nettoyage visuel)
+    // --- FONCTION CŒUR : ENVOI DE LA TRANSACTION ---
+    async function processTransaction() {
         const user = tg.initDataUnsafe?.user;
         const amount = parseFloat(amountToSendInput.value);
         
@@ -403,12 +403,53 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const json = await res.json();
             if(!res.ok) throw new Error(json.message);
+            
+            // Succès
             tg.showAlert(json.message);
+            // On peut vider les champs ici si tu veux
+            amountToSendInput.value = '';
+            calculate();
+
         } catch (e) {
             tg.showAlert(e.message);
         } finally {
             tg.MainButton.hideProgress();
         }
+    }
+
+    // --- INTERCEPTION DU CLIC (Night Mode Logic) ---
+    submitBtn.addEventListener('click', () => {
+        // 1. Validation de base avant de lancer la modale
+        const amount = parseFloat(amountToSendInput.value);
+        if (!amount || amount <= 0) return tg.showAlert("Veuillez entrer un montant.");
+
+        // 2. Vérification Mode Nuit
+        const settings = window.atexSettings || {};
+        
+        if (settings.night_mode_manual) {
+            // AFFICHER LA MODALE NUIT
+            const nightModal = document.getElementById('night-mode-modal');
+            nightModal.classList.remove('hidden');
+            
+            // Vibration pour attirer l'attention (Haptic Feedback)
+            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
+
+        } else {
+            // MODE JOUR : Envoi direct
+            processTransaction();
+        }
+    });
+
+    // --- GESTION DES BOUTONS DE LA MODALE NUIT ---
+    const nightModal = document.getElementById('night-mode-modal');
+    
+    document.getElementById('night-cancel-btn').addEventListener('click', () => {
+        nightModal.classList.add('hidden'); // On ferme juste
+    });
+
+    document.getElementById('night-continue-btn').addEventListener('click', () => {
+        nightModal.classList.add('hidden'); // On ferme
+        processTransaction(); // ET on lance la transaction
     });
 
     // Copie Lien
