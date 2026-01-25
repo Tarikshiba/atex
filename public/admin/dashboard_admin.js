@@ -623,21 +623,36 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { console.error(e); }
     };
 
-    // B. Ouvrir la modale (VERSION ROBUSTE V2)
+    // B. Ouvrir la modale (VERSION SUPER FORCE)
     window.openContractModal = () => {
-        // On cherche l'élément AU MOMENT DU CLIC pour être sûr à 100% de le trouver
         const modal = document.getElementById('add-contract-modal');
         const form = document.getElementById('add-contract-form');
 
         if (modal) {
-            console.log("✅ Modale trouvée, ouverture...");
+            console.log("🚀 Ouverture FORCÉE de la modale...");
+            
+            // 1. On retire la classe 'hidden'
             modal.classList.remove('hidden');
+            
+            // 2. FORCE BRUTE : On applique le style directement (pour régler le bug d'affichage)
+            modal.style.display = 'flex';
+            modal.style.zIndex = '9999'; // On la met tout devant
+            
             if(form) form.reset();
         } else {
-            console.error("❌ ERREUR : Impossible de trouver la modale avec l'ID 'add-contract-modal'");
-            alert("Erreur technique : La fenêtre du contrat est introuvable dans la page.");
+            alert("Erreur : Fenêtre introuvable.");
         }
     };
+
+    // Gestion de la fermeture (Nouveau bouton avec ID)
+    const closeBtn = document.getElementById('close-contract-btn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            const modal = document.getElementById('add-contract-modal');
+            modal.classList.add('hidden');
+            modal.style.display = 'none'; // On cache proprement
+        });
+    }
 
     // C. Créer un contrat
     if (contractForm) {

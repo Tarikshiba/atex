@@ -319,7 +319,7 @@
         </div>
     </div>
 
-    <div id="add-contract-modal" class="fixed inset-0 bg-black bg-opacity-80 hidden flex justify-center items-center z-[60] backdrop-blur-sm">
+   <div id="add-contract-modal" class="fixed inset-0 bg-black bg-opacity-80 hidden flex justify-center items-center z-50 backdrop-blur-sm">
         <div class="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md border border-yellow-600">
             <h3 class="text-xl font-bold mb-6 text-yellow-400 text-center">✍️ Signer un Contrat</h3>
             <form id="add-contract-form" class="space-y-4">
@@ -346,7 +346,7 @@
                 </div>
                 
                 <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-700">
-                    <button type="button" onclick="document.getElementById('add-contract-modal').classList.add('hidden')" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-white transition">Annuler</button>
+                    <button type="button" id="close-contract-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-white transition">Annuler</button>
                     <button type="submit" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded text-white font-bold transition">Créer & Notifier</button>
                 </div>
             </form>
