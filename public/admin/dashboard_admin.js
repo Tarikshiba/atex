@@ -556,8 +556,131 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ===============================================
+    // SECTION 6 : GESTION DES CONTRATS (PHASE 1)
+    // ===============================================
+    
+    const contractsBody = document.getElementById('contracts-list-body');
+    const contractModal = document.getElementById('add-contract-modal');
+    const contractForm = document.getElementById('add-contract-form');
+
+    // A. Charger et afficher les contrats
+    const fetchContracts = async () => {
+        if (!contractsBody) return;
+        try {
+            const res = await fetch('/api/admin/contracts', { headers: { 'Authorization': `Bearer ${token}` } });
+            const contracts = await res.json();
+            
+            if (contracts.length === 0) {
+                contractsBody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-500 italic">Aucun contrat actif.</td></tr>';
+                return;
+            }
+
+            contractsBody.innerHTML = contracts.map(c => {
+                // Calcul du pourcentage
+                const percent = Math.min(100, Math.round((c.current / c.target) * 100));
+                let barColor = 'bg-blue-500';
+                if(percent >= 100) barColor = 'bg-green-500';
+                
+                // Jours restants
+                const end = new Date(c.endDate);
+                const now = new Date();
+                const diffTime = end - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                let timeBadge = `<span class="bg-gray-700 text-xs px-2 py-1 rounded">${diffDays}j restants</span>`;
+                if(diffDays < 0) timeBadge = `<span class="bg-red-900 text-red-200 text-xs px-2 py-1 rounded">Expiré</span>`;
+                else if(c.status === 'completed') timeBadge = `<span class="bg-green-900 text-green-200 text-xs px-2 py-1 rounded">Terminé</span>`;
+
+                return `
+                <tr class="border-b border-gray-700 hover:bg-gray-750">
+                    <td class="px-4 py-3">
+                        <div class="font-bold text-white">@${c.username}</div>
+                        <div class="text-xs text-gray-500">${c.telegramId}</div>
+                    </td>
+                    <td class="px-4 py-3 font-mono text-yellow-400">${c.target} Pers.</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold w-8 text-right">${percent}%</span>
+                            <div class="w-24 bg-gray-700 rounded-full h-2">
+                                <div class="${barColor} h-2 rounded-full" style="width: ${percent}%"></div>
+                            </div>
+                            <span class="text-xs text-gray-400">(${c.current})</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 font-bold text-green-400">${c.reward.toLocaleString()} F</td>
+                    <td class="px-4 py-3">${timeBadge}</td>
+                    <td class="px-4 py-3 text-right">
+                        <button onclick="deleteContract('${c.id}')" class="text-red-400 hover:text-red-200 transition" title="Supprimer">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+
+        } catch (e) { console.error(e); }
+    };
+
+    // B. Ouvrir la modale
+    window.openContractModal = () => {
+        if(contractForm) contractForm.reset();
+        if(contractModal) contractModal.classList.remove('hidden');
+    };
+
+    // C. Créer un contrat
+    if (contractForm) {
+        contractForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = contractForm.querySelector('button[type="submit"]');
+            const originalText = btn.textContent;
+            btn.textContent = "Création...";
+            btn.disabled = true;
+
+            const payload = {
+                identifier: document.getElementById('contract-user').value.trim(),
+                target: parseInt(document.getElementById('contract-target').value),
+                duration: parseInt(document.getElementById('contract-duration').value),
+                reward: parseInt(document.getElementById('contract-reward').value)
+            };
+
+            try {
+                const res = await fetch('/api/admin/contracts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(payload)
+                });
+                
+                const json = await res.json();
+
+                if (res.ok) {
+                    alert("✅ " + json.message);
+                    contractModal.classList.add('hidden');
+                    fetchContracts();
+                } else {
+                    alert("❌ Erreur : " + json.message);
+                }
+            } catch (error) {
+                alert("Erreur de connexion.");
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        });
+    }
+
+    // D. Supprimer un contrat
+    window.deleteContract = async (id) => {
+        if(!confirm("Supprimer ce contrat ? L'ambassadeur ne verra plus sa progression.")) return;
+        try {
+            await fetch(`/api/admin/contracts/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+            fetchContracts();
+        } catch(e) { alert("Erreur suppression"); }
+    };
+
     // --- INITIALISATION ---
     fetchPendingTransactions();
     fetchWithdrawals();
     loadConfiguration();
+    fetchContracts();
 });

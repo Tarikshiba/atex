@@ -2170,6 +2170,112 @@ supportBot.on('message', async (msg) => {
     }
 });
 
+// ===============================================
+// NOUVELLES ROUTES ADMIN : GESTION DES CONTRATS AMBASSADEURS (PHASE 1)
+// ===============================================
+
+// 1. Récupérer tous les contrats
+app.get('/api/admin/contracts', verifyAdminToken, async (req, res) => {
+    try {
+        const snapshot = await db.collection('contracts').orderBy('createdAt', 'desc').get();
+        const contracts = snapshot.docs.map(doc => {
+            const data = doc.data();
+            // Conversion des dates pour le frontend
+            return {
+                id: doc.id,
+                ...data,
+                startDate: data.startDate ? data.startDate.toDate() : null,
+                endDate: data.endDate ? data.endDate.toDate() : null
+            };
+        });
+        res.status(200).json(contracts);
+    } catch (error) {
+        console.error("Erreur récupération contrats:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// 2. Créer un nouveau contrat
+app.post('/api/admin/contracts', verifyAdminToken, async (req, res) => {
+    try {
+        const { identifier, target, reward, duration } = req.body; // identifier = ID ou Username
+
+        if (!identifier || !target || !reward || !duration) {
+            return res.status(400).json({ message: "Tous les champs sont requis." });
+        }
+
+        // A. Trouver l'utilisateur (par ID ou Username)
+        const usersRef = db.collection('users');
+        let userSnapshot = await usersRef.where('telegramId', '==', parseInt(identifier)).limit(1).get();
+        
+        if (userSnapshot.empty) {
+            // Essai par username (sans le @)
+            const cleanUsername = identifier.replace('@', '');
+            userSnapshot = await usersRef.where('telegramUsername', '==', cleanUsername).limit(1).get();
+        }
+
+        if (userSnapshot.empty) {
+            return res.status(404).json({ message: "Utilisateur introuvable dans la base." });
+        }
+
+        const userDoc = userSnapshot.docs[0];
+        const userData = userDoc.data();
+
+        // B. Calcul des dates
+        const startDate = new Date();
+        const endDate = new Date();
+        endDate.setDate(startDate.getDate() + parseInt(duration));
+
+        // C. Créer le contrat
+        const newContract = {
+            telegramId: userData.telegramId,
+            username: userData.telegramUsername || userData.firstName || 'Inconnu',
+            target: parseInt(target),
+            current: 0, // Commence à 0
+            reward: parseInt(reward),
+            startDate: admin.firestore.Timestamp.fromDate(startDate),
+            endDate: admin.firestore.Timestamp.fromDate(endDate),
+            status: 'active', // active, completed, paid, expired
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        await db.collection('contracts').add(newContract);
+
+        // D. Promouvoir l'utilisateur "Ambassadeur" (Débloque l'onglet secret Phase 3)
+        await userDoc.ref.update({ isAmbassador: true });
+
+        // E. Notification Telegram
+        const msg = `💼 **OFFRE DE CONTRAT AMBASSADEUR**\n\nFélicitations ! Vous avez reçu une proposition de contrat.\n\n🎯 **Objectif :** ${target} nouvelles personnes validées\n💰 **Prime :** ${reward.toLocaleString()} FCFA\n⏳ **Durée :** ${duration} jours\n\n_Ouvrez l'application (Onglet Ambassadeur) pour suivre votre progression !_`;
+        try { await miniAppBot.sendMessage(userData.telegramId, msg, { parse_mode: 'Markdown' }); } catch(e){}
+
+        res.status(201).json({ message: "Contrat créé et utilisateur notifié !" });
+
+    } catch (error) {
+        console.error("Erreur création contrat:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
+// 3. Supprimer / Annuler un contrat
+app.delete('/api/admin/contracts/:id', verifyAdminToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // On récupère le contrat pour savoir à qui retirer le grade si besoin
+        const doc = await db.collection('contracts').doc(id).get();
+        if (doc.exists) {
+            const data = doc.data();
+            // Optionnel : Retirer le statut ambassadeur si c'était son seul contrat
+            // Pour l'instant on laisse le statut pour ne pas compliquer
+        }
+
+        await db.collection('contracts').doc(id).delete();
+        res.status(200).json({ message: "Contrat supprimé." });
+    } catch (error) {
+        res.status(500).json({ message: "Erreur serveur." });
+    }
+});
+
 // --- GESTION DES ROUTES FRONTEND ET DÉMARRAGE ---
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));

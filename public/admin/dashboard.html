@@ -66,6 +66,36 @@
             </form>
         </div>
 
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8 border-l-4 border-yellow-500">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-yellow-400"><i class="fas fa-briefcase"></i> Contrats Ambassadeurs</h2>
+                    <p class="text-xs text-gray-400">Gérez vos influenceurs et leurs objectifs.</p>
+                </div>
+                <button onclick="openContractModal()" class="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded text-sm font-bold shadow transition">
+                    <i class="fas fa-plus"></i> Nouveau Contrat
+                </button>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-gray-400">
+                    <thead class="bg-gray-700 text-gray-200 uppercase">
+                        <tr>
+                            <th class="px-4 py-3">Ambassadeur</th>
+                            <th class="px-4 py-3">Objectif</th>
+                            <th class="px-4 py-3 text-center">Progression</th>
+                            <th class="px-4 py-3">Prime</th>
+                            <th class="px-4 py-3">Fin</th>
+                            <th class="px-4 py-3 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contracts-list-body">
+                        <tr><td colspan="6" class="text-center py-4">Chargement...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
             <h2 class="text-xl font-semibold mb-6 text-purple-400"><i class="fas fa-cogs"></i> Paramètres Généraux</h2>
             
@@ -290,5 +320,40 @@
             </div>
         </div>
     </div>
+
+    <div id="add-contract-modal" class="fixed inset-0 bg-black bg-opacity-80 hidden flex justify-center items-center z-[60] backdrop-blur-sm">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md border border-yellow-600">
+            <h3 class="text-xl font-bold mb-6 text-yellow-400 text-center">✍️ Signer un Contrat</h3>
+            <form id="add-contract-form" class="space-y-4">
+                <div>
+                    <label class="text-xs text-gray-400 mb-1 block">Identifiant Ambassadeur</label>
+                    <input type="text" id="contract-user" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-yellow-500 text-white outline-none" placeholder="ID Telegram (ex: 1746...) ou @Pseudo" required>
+                    <p class="text-[10px] text-gray-500 mt-1">L'utilisateur doit déjà avoir lancé le bot au moins une fois.</p>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs text-gray-400 mb-1 block">Objectif (Pers.)</label>
+                        <input type="number" id="contract-target" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-yellow-500 text-white font-bold outline-none" placeholder="ex: 100" required>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 mb-1 block">Durée (Jours)</label>
+                        <input type="number" id="contract-duration" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-yellow-500 text-white outline-none" placeholder="ex: 30" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs text-gray-400 mb-1 block">Prime à la clé (FCFA)</label>
+                    <input type="number" id="contract-reward" class="w-full p-3 bg-gray-900 rounded border border-gray-600 focus:border-yellow-500 text-white font-mono text-lg outline-none" placeholder="ex: 50000" required>
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-700">
+                    <button type="button" onclick="document.getElementById('add-contract-modal').classList.add('hidden')" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-white transition">Annuler</button>
+                    <button type="submit" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded text-white font-bold transition">Créer & Notifier</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </body>
 </html>
