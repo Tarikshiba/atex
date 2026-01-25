@@ -578,7 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             contractsBody.innerHTML = contracts.map(c => {
                 // Calcul du pourcentage
-                const percent = Math.min(100, Math.round((c.current / c.target) * 100));
+                const percent = c.target > 0 ? Math.min(100, Math.round((c.current / c.target) * 100)) : 0;
                 let barColor = 'bg-blue-500';
                 if(percent >= 100) barColor = 'bg-green-500';
                 
@@ -622,7 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { console.error(e); }
     };
 
-    // B. Ouvrir la modale
+    // B. Ouvrir la modale (C'est cette fonction qui manquait !)
     window.openContractModal = () => {
         if(contractForm) contractForm.reset();
         if(contractModal) contractModal.classList.remove('hidden');
@@ -682,5 +682,5 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchPendingTransactions();
     fetchWithdrawals();
     loadConfiguration();
-    fetchContracts();
+    fetchContracts(); 
 });
