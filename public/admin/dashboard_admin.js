@@ -1,3 +1,4 @@
+console.log("🚀 CHARGEMENT SYSTÈME CONTRATS V1...");
 document.addEventListener('DOMContentLoaded', () => {
     // --- SÉLECTION DES ÉLÉMENTS DU DOM ---
     const dashboardContent = document.getElementById('dashboard-content');
