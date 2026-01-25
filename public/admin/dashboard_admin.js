@@ -623,10 +623,20 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { console.error(e); }
     };
 
-    // B. Ouvrir la modale (C'est cette fonction qui manquait !)
+    // B. Ouvrir la modale (VERSION ROBUSTE V2)
     window.openContractModal = () => {
-        if(contractForm) contractForm.reset();
-        if(contractModal) contractModal.classList.remove('hidden');
+        // On cherche l'élément AU MOMENT DU CLIC pour être sûr à 100% de le trouver
+        const modal = document.getElementById('add-contract-modal');
+        const form = document.getElementById('add-contract-form');
+
+        if (modal) {
+            console.log("✅ Modale trouvée, ouverture...");
+            modal.classList.remove('hidden');
+            if(form) form.reset();
+        } else {
+            console.error("❌ ERREUR : Impossible de trouver la modale avec l'ID 'add-contract-modal'");
+            alert("Erreur technique : La fenêtre du contrat est introuvable dans la page.");
+        }
     };
 
     // C. Créer un contrat
