@@ -1346,16 +1346,47 @@ app.post('/api/miniapp/user-check-in', async (req, res) => {
             await usersRef.add(newUser);
             console.log(`Nouvel utilisateur ${user.id} créé avec le code ${newReferralCode}.`);
 
-            if (referredByCode) {
+           if (referredByCode) {
                 wasReferred = true;
                 const referrerSnapshot = await usersRef.where('referralCode', '==', referredByCode).limit(1).get();
 
                 if (!referrerSnapshot.empty) {
                     const referrerDoc = referrerSnapshot.docs[0];
-                    // On incrémente juste le compteur total (l'actif se fera lors du paiement)
+                    const referrerData = referrerDoc.data();
+
+                    // 1. Incrémentation classique (Compteur total)
                     await referrerDoc.ref.update({
                         referralCount: admin.firestore.FieldValue.increment(1)
                     });
+
+                    // 2. LOGIQUE CONTRAT AMBASSADEUR (NOUVEAU)
+                    // On cherche si ce parrain a un contrat 'active'
+                    const contractsRef = db.collection('contracts');
+                    const activeContractSnapshot = await contractsRef
+                        .where('telegramId', '==', referrerData.telegramId)
+                        .where('status', '==', 'active')
+                        .limit(1)
+                        .get();
+
+                    if (!activeContractSnapshot.empty) {
+                        const contractDoc = activeContractSnapshot.docs[0];
+                        const contract = contractDoc.data();
+                        const now = admin.firestore.Timestamp.now();
+
+                        // Vérification de la date limite
+                        if (contract.endDate && now.toMillis() < contract.endDate.toMillis()) {
+                            // Le contrat est valide, on incrémente la progression
+                            await contractDoc.ref.update({
+                                currentCount: admin.firestore.FieldValue.increment(1)
+                            });
+                            console.log(`[Contrat] Progression +1 pour ${referrerData.telegramId}`);
+                        } else {
+                            // Le contrat est expiré, on le marque comme échoué (ou expired)
+                            // On ne le fait pas ici pour ne pas ralentir le check-in, 
+                            // le client verra l'expiration au chargement.
+                            console.log(`[Contrat] Ignoré car expiré pour ${referrerData.telegramId}`);
+                        }
+                    }
                 }
             }
         } else {
@@ -2171,109 +2202,150 @@ supportBot.on('message', async (msg) => {
 });
 
 // ===============================================
-// NOUVELLES ROUTES ADMIN : GESTION DES CONTRATS AMBASSADEURS (PHASE 1)
+// NOUVELLES ROUTES : CONTRATS AMBASSADEUR (COMPATIBLE MINI APP)
 // ===============================================
 
-// 1. Récupérer tous les contrats
-app.get('/api/admin/contracts', verifyAdminToken, async (req, res) => {
-    try {
-        const snapshot = await db.collection('contracts').orderBy('createdAt', 'desc').get();
-        const contracts = snapshot.docs.map(doc => {
-            const data = doc.data();
-            // Conversion des dates pour le frontend
-            return {
-                id: doc.id,
-                ...data,
-                startDate: data.startDate ? data.startDate.toDate() : null,
-                endDate: data.endDate ? data.endDate.toDate() : null
-            };
-        });
-        res.status(200).json(contracts);
-    } catch (error) {
-        console.error("Erreur récupération contrats:", error);
-        res.status(500).json({ message: "Erreur serveur." });
-    }
-});
-
-// 2. Créer un nouveau contrat
+// 1. ADMIN : Créer un contrat (Nécessite token Admin)
 app.post('/api/admin/contracts', verifyAdminToken, async (req, res) => {
     try {
-        const { identifier, target, reward, duration } = req.body; // identifier = ID ou Username
+        const { telegramId, target, reward, durationDays } = req.body;
+        if (!telegramId || !target || !reward || !durationDays) return res.status(400).json({ message: "Données incomplètes." });
 
-        if (!identifier || !target || !reward || !duration) {
-            return res.status(400).json({ message: "Tous les champs sont requis." });
-        }
+        const contractsRef = db.collection('contracts');
+        // Vérifier si un contrat existe déjà (offered ou active)
+        const existingContract = await contractsRef
+            .where('telegramId', '==', parseInt(telegramId))
+            .where('status', 'in', ['offered', 'active'])
+            .get();
 
-        // A. Trouver l'utilisateur (par ID ou Username)
-        const usersRef = db.collection('users');
-        let userSnapshot = await usersRef.where('telegramId', '==', parseInt(identifier)).limit(1).get();
-        
-        if (userSnapshot.empty) {
-            // Essai par username (sans le @)
-            const cleanUsername = identifier.replace('@', '');
-            userSnapshot = await usersRef.where('telegramUsername', '==', cleanUsername).limit(1).get();
-        }
+        if (!existingContract.empty) return res.status(400).json({ message: "Contrat déjà en cours pour cet utilisateur." });
 
-        if (userSnapshot.empty) {
-            return res.status(404).json({ message: "Utilisateur introuvable dans la base." });
-        }
-
-        const userDoc = userSnapshot.docs[0];
-        const userData = userDoc.data();
-
-        // B. Calcul des dates
-        const startDate = new Date();
-        const endDate = new Date();
-        endDate.setDate(startDate.getDate() + parseInt(duration));
-
-        // C. Créer le contrat
-        const newContract = {
-            telegramId: userData.telegramId,
-            username: userData.telegramUsername || userData.firstName || 'Inconnu',
+        // Créer le contrat
+        await contractsRef.add({
+            telegramId: parseInt(telegramId),
+            status: 'offered',
             target: parseInt(target),
-            current: 0, // Commence à 0
             reward: parseInt(reward),
-            startDate: admin.firestore.Timestamp.fromDate(startDate),
-            endDate: admin.firestore.Timestamp.fromDate(endDate),
-            status: 'active', // active, completed, paid, expired
+            durationDays: parseInt(durationDays),
+            currentCount: 0,
             createdAt: admin.firestore.FieldValue.serverTimestamp()
-        };
-
-        await db.collection('contracts').add(newContract);
-
-        // D. Promouvoir l'utilisateur "Ambassadeur" (Débloque l'onglet secret Phase 3)
-        await userDoc.ref.update({ isAmbassador: true });
-
-        // E. Notification Telegram
-        const msg = `💼 **OFFRE DE CONTRAT AMBASSADEUR**\n\nFélicitations ! Vous avez reçu une proposition de contrat.\n\n🎯 **Objectif :** ${target} nouvelles personnes validées\n💰 **Prime :** ${reward.toLocaleString()} FCFA\n⏳ **Durée :** ${duration} jours\n\n_Ouvrez l'application (Onglet Ambassadeur) pour suivre votre progression !_`;
-        try { await miniAppBot.sendMessage(userData.telegramId, msg, { parse_mode: 'Markdown' }); } catch(e){}
-
-        res.status(201).json({ message: "Contrat créé et utilisateur notifié !" });
-
-    } catch (error) {
-        console.error("Erreur création contrat:", error);
-        res.status(500).json({ message: "Erreur serveur." });
+        });
+        
+        // Notification
+        try { await miniAppBot.sendMessage(telegramId, `📜 **PROPOSITION CONTRAT**\nObjectif: ${target} inscrits\nPrime: ${reward} FCFA\nAllez dans l'onglet "Gagner" pour signer !`, { parse_mode: 'Markdown' }); } catch (e) {}
+        
+        res.status(200).json({ message: "Contrat proposé avec succès." });
+    } catch (e) { 
+        console.error(e);
+        res.status(500).json({ message: "Erreur serveur" }); 
     }
 });
 
-// 3. Supprimer / Annuler un contrat
-app.delete('/api/admin/contracts/:id', verifyAdminToken, async (req, res) => {
+// 2. USER : Récupérer son contrat (Via ID Telegram dans l'URL)
+app.get('/api/miniapp/contract/:telegramId', async (req, res) => {
     try {
-        const { id } = req.params;
-        
-        // On récupère le contrat pour savoir à qui retirer le grade si besoin
-        const doc = await db.collection('contracts').doc(id).get();
-        if (doc.exists) {
-            const data = doc.data();
-            // Optionnel : Retirer le statut ambassadeur si c'était son seul contrat
-            // Pour l'instant on laisse le statut pour ne pas compliquer
-        }
+        const telegramId = parseInt(req.params.telegramId);
+        if (isNaN(telegramId)) return res.status(400).json({ message: "ID Invalide" });
 
-        await db.collection('contracts').doc(id).delete();
-        res.status(200).json({ message: "Contrat supprimé." });
-    } catch (error) {
-        res.status(500).json({ message: "Erreur serveur." });
+        const contractsRef = db.collection('contracts');
+        // On cherche le contrat pertinent
+        const snapshot = await contractsRef
+            .where('telegramId', '==', telegramId)
+            .where('status', 'in', ['offered', 'active', 'completed'])
+            .limit(1)
+            .get();
+
+        if (snapshot.empty) return res.status(200).json(null);
+
+        const doc = snapshot.docs[0];
+        const data = doc.data();
+
+        // Vérification automatique de l'expiration
+        if (data.status === 'active' && data.endDate) {
+            const now = Date.now();
+            const end = data.endDate.toMillis(); // Firebase Timestamp vers ms
+            
+            if (now > end) {
+                // Le temps est écoulé
+                if (data.currentCount >= data.target) {
+                    await doc.ref.update({ status: 'completed' });
+                    data.status = 'completed';
+                } else {
+                    await doc.ref.update({ status: 'failed' });
+                    return res.status(200).json({ status: 'failed' });
+                }
+            } else if (data.currentCount >= data.target) {
+                 // Objectif atteint avant la fin
+                 await doc.ref.update({ status: 'completed' });
+                 data.status = 'completed';
+            }
+        }
+        
+        // Formatage pour le frontend
+        let formattedData = { ...data, id: doc.id };
+        if (data.startDate) formattedData.startDate = data.startDate.toDate();
+        if (data.endDate) formattedData.endDate = data.endDate.toDate();
+
+        res.status(200).json(formattedData);
+    } catch (error) { 
+        console.error(error);
+        res.status(500).json({ message: "Erreur serveur." }); 
     }
+});
+
+// 3. USER : Signer le contrat
+app.post('/api/miniapp/contract/sign', async (req, res) => {
+    try {
+        const { telegramId, contractId } = req.body;
+        const contractRef = db.collection('contracts').doc(contractId);
+        const doc = await contractRef.get();
+
+        if (!doc.exists) return res.status(404).json({ message: "Contrat introuvable." });
+        const data = doc.data();
+
+        // Sécurité : Vérifier que c'est bien son contrat
+        if (data.telegramId !== parseInt(telegramId)) return res.status(403).json({ message: "Interdit." });
+        if (data.status !== 'offered') return res.status(400).json({ message: "Ce contrat n'est plus disponible." });
+
+        const now = new Date();
+        const endDate = new Date();
+        endDate.setDate(now.getDate() + data.durationDays);
+
+        await contractRef.update({
+            status: 'active',
+            startDate: admin.firestore.Timestamp.fromDate(now),
+            endDate: admin.firestore.Timestamp.fromDate(endDate)
+        });
+
+        res.status(200).json({ message: "Contrat signé !" });
+    } catch (error) { res.status(500).json({ message: "Erreur serveur." }); }
+});
+
+// 4. USER : Réclamer le paiement (Claim)
+app.post('/api/miniapp/contract/claim', async (req, res) => {
+    try {
+        const { telegramId, contractId, paymentMethod, paymentDetails } = req.body;
+        const contractRef = db.collection('contracts').doc(contractId);
+        const doc = await contractRef.get();
+
+        if (!doc.exists) return res.status(404).json({ message: "Contrat introuvable." });
+        const data = doc.data();
+
+        if (data.telegramId !== parseInt(telegramId)) return res.status(403).json({ message: "Interdit." });
+        if (data.status !== 'completed') return res.status(400).json({ message: "Objectif non atteint." });
+
+        await contractRef.update({ 
+            status: 'pending_payment',
+            claimDate: admin.firestore.FieldValue.serverTimestamp(),
+            claimDetails: { method: paymentMethod, details: paymentDetails }
+        });
+
+        // Notification Admin
+        const msg = `🏆 **PAIEMENT AMBASSADEUR REQUIS**\n\n👤 ID: ${data.telegramId}\n💰 Montant: ${data.reward} FCFA\n\nAllez dans le Dashboard pour valider le retrait.`;
+        await adminBot.sendMessage(process.env.TELEGRAM_CHAT_ID, msg, { parse_mode: 'Markdown' });
+
+        res.status(200).json({ message: "Demande envoyée !" });
+    } catch (error) { res.status(500).json({ message: "Erreur serveur." }); }
 });
 
 // --- GESTION DES ROUTES FRONTEND ET DÉMARRAGE ---

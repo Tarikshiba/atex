@@ -116,6 +116,70 @@
             </section>
 
             <section id="earn" class="page px-4 pt-12 fade-in">
+<div id="ambassador-section" class="mb-8 hidden animate-fade-up">
+    
+    <div id="contract-offer-card" class="hidden relative overflow-hidden rounded-2xl bg-gray-900 text-white shadow-2xl border border-gray-700 p-6 text-center">
+        <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-500 rounded-full blur-3xl opacity-20 -mr-10 -mt-10"></div>
+        
+        <div class="relative z-10">
+            <div class="w-14 h-14 mx-auto bg-indigo-600 rounded-full flex items-center justify-center mb-3 shadow-lg">
+                <i class="fas fa-file-signature text-2xl"></i>
+            </div>
+            <h2 class="text-lg font-bold">Proposition de Contrat</h2>
+            <p class="text-gray-400 text-xs mb-4">Deviens Ambassadeur officiel ATEX.</p>
+
+            <div class="bg-gray-800 rounded-lg p-3 mb-4 space-y-2 text-sm">
+                <div class="flex justify-between"><span class="text-gray-400">Objectif :</span> <span class="font-bold text-white" id="offer-target">--</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Durée :</span> <span class="font-bold text-white" id="offer-duration">--</span></div>
+                <div class="flex justify-between border-t border-gray-700 pt-2"><span class="text-indigo-400 font-bold">PRIME :</span> <span class="font-bold text-green-400" id="offer-reward">-- FCFA</span></div>
+            </div>
+
+            <button id="sign-contract-btn" class="w-full py-3 rounded-lg bg-white text-indigo-900 font-bold hover:bg-gray-100 transition shadow-md">
+                SIGNER MAINTENANT
+            </button>
+        </div>
+    </div>
+
+    <div id="contract-active-card" class="hidden relative rounded-2xl bg-gradient-to-br from-indigo-900 to-slate-800 text-white p-5 shadow-xl border border-indigo-500/30">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h3 class="font-bold text-indigo-200 text-sm uppercase tracking-wide">Mission en cours</h3>
+                <p class="text-xs text-white/60 mt-1" id="contract-timer">Calcul du temps...</p>
+            </div>
+            <span id="contract-end-badge" class="bg-indigo-600 px-2 py-1 rounded text-xs font-bold">J-?</span>
+        </div>
+
+        <div class="flex justify-between text-sm mb-1 font-medium">
+            <span>Progression</span>
+            <span><span id="contract-progress-text">0</span> / <span id="contract-target-display">0</span></span>
+        </div>
+        <div class="w-full bg-gray-700 rounded-full h-2.5 mb-4">
+            <div id="contract-progress-bar" class="bg-indigo-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+
+        <div class="flex justify-between items-center bg-black/20 p-2 rounded">
+            <span class="text-xs text-gray-400">Gain potentiel</span>
+            <span class="font-bold text-green-400" id="contract-potential-reward">-- FCFA</span>
+        </div>
+    </div>
+
+    <div id="contract-success-card" class="hidden relative rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 text-white p-6 text-center shadow-xl">
+        <i class="fas fa-trophy text-4xl text-yellow-300 mb-2 block drop-shadow-md"></i>
+        <h2 class="text-xl font-bold">MISSION ACCOMPLIE !</h2>
+        <p class="text-white/80 text-sm mb-4">Objectif atteint.</p>
+        
+        <div class="bg-white/20 p-3 rounded-lg mb-4 backdrop-blur-sm">
+            <p class="text-xs uppercase font-bold text-green-100">À récupérer</p>
+            <p class="text-2xl font-bold" id="contract-claim-amount">-- FCFA</p>
+        </div>
+
+        <button id="claim-contract-btn" class="w-full py-3 rounded-lg bg-white text-green-800 font-bold hover:bg-green-50 transition shadow-lg">
+            RÉCLAMER MA PAIE
+        </button>
+    </div>
+
+</div>
+
                 <div class="flex justify-between items-end mb-6">
                     <div>
                         <h1 class="text-3xl font-bold text-gray-900">Gagner</h1>

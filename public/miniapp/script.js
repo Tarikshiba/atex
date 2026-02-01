@@ -542,7 +542,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // 4. Reveal
+      // 4. Reveal
+        
+        // --- DÉMARRAGE SYSTÈME AMBASSADEUR ---
+        await initAmbassadorSystem(); 
+        // -------------------------------------
+
         setTimeout(() => {
             document.getElementById('splash-screen').classList.add('hidden');
             document.getElementById('main-content').classList.remove('hidden');
@@ -560,4 +565,118 @@ document.addEventListener('DOMContentLoaded', () => {
             window.open(url, '_blank');
         }
     };
+
+// --- GESTION DES CONTRATS AMBASSADEUR ---
+    async function initAmbassadorSystem() {
+        const user = tg.initDataUnsafe?.user;
+        if (!user) return; // Si pas d'user Telegram, on arrête
+
+        const section = document.getElementById('ambassador-section');
+        const offerCard = document.getElementById('contract-offer-card');
+        const activeCard = document.getElementById('contract-active-card');
+        const successCard = document.getElementById('contract-success-card');
+
+        try {
+            // 1. Récupérer le contrat
+            const res = await fetch(`/api/miniapp/contract/${user.id}`);
+            const contract = await res.json();
+
+            // Si pas de contrat, on cache tout et on sort
+            if (!contract) {
+                if(section) section.classList.add('hidden');
+                return;
+            }
+
+            // On affiche la section principale
+            if(section) section.classList.remove('hidden');
+
+            // --- CAS 1 : OFFRE (À signer) ---
+            if (contract.status === 'offered') {
+                if(offerCard) offerCard.classList.remove('hidden');
+                document.getElementById('offer-target').textContent = `${contract.target} Invités`;
+                document.getElementById('offer-duration').textContent = `${contract.durationDays} Jours`;
+                document.getElementById('offer-reward').textContent = `${contract.reward.toLocaleString()} FCFA`;
+
+                document.getElementById('sign-contract-btn').onclick = async () => {
+                    const btn = document.getElementById('sign-contract-btn');
+                    btn.innerHTML = 'Signature...';
+                    try {
+                        await fetch('/api/miniapp/contract/sign', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ telegramId: user.id, contractId: contract.id })
+                        });
+                        tg.showAlert("Contrat signé ! C'est parti !");
+                        window.location.reload(); // Recharger pour voir la carte "Active"
+                    } catch (e) {
+                        tg.showAlert("Erreur lors de la signature.");
+                        btn.innerHTML = "Réessayer";
+                    }
+                };
+            }
+
+            // --- CAS 2 : ACTIF (En cours) ---
+            else if (contract.status === 'active') {
+                if(activeCard) activeCard.classList.remove('hidden');
+
+                // Calculs dates
+                const endDate = new Date(contract.endDate);
+                const now = new Date();
+                const diffTime = endDate - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                // UI
+                document.getElementById('contract-target-display').textContent = contract.target;
+                document.getElementById('contract-progress-text').textContent = contract.currentCount;
+                document.getElementById('contract-potential-reward').textContent = `${contract.reward.toLocaleString()} FCFA`;
+                
+                // Barre de progression
+                const percent = Math.min((contract.currentCount / contract.target) * 100, 100);
+                document.getElementById('contract-progress-bar').style.width = `${percent}%`;
+
+                // Timer
+                const timerEl = document.getElementById('contract-timer');
+                const badgeEl = document.getElementById('contract-end-badge');
+                
+                if (diffTime > 0) {
+                    badgeEl.textContent = `J-${diffDays}`;
+                    timerEl.textContent = `Expire dans ${diffDays} jours`;
+                } else {
+                    badgeEl.textContent = "FINI";
+                    badgeEl.classList.replace('bg-indigo-600', 'bg-red-600');
+                    timerEl.textContent = "Temps écoulé";
+                }
+            }
+
+            // --- CAS 3 : SUCCÈS (Terminé) ---
+            else if (contract.status === 'completed') {
+                if(successCard) successCard.classList.remove('hidden');
+                document.getElementById('contract-claim-amount').textContent = `${contract.reward.toLocaleString()} FCFA`;
+
+                document.getElementById('claim-contract-btn').onclick = async () => {
+                    const btn = document.getElementById('claim-contract-btn');
+                    btn.innerHTML = 'Envoi...';
+                    try {
+                        await fetch('/api/miniapp/contract/claim', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                telegramId: user.id, 
+                                contractId: contract.id,
+                                paymentMethod: 'Defaut', 
+                                paymentDetails: 'Via Admin' 
+                            })
+                        });
+                        tg.showAlert("Demande envoyée à l'administrateur !");
+                        btn.innerHTML = "✅ Demande envoyée";
+                        btn.disabled = true;
+                    } catch (e) {
+                        tg.showAlert("Erreur réseau.");
+                    }
+                };
+            }
+
+        } catch (e) { console.error("Erreur Ambassadeur:", e); }
+    }
+    
 });

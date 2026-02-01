@@ -1,4 +1,3 @@
-console.log("🚀 CHARGEMENT SYSTÈME CONTRATS V1...");
 document.addEventListener('DOMContentLoaded', () => {
     // --- SÉLECTION DES ÉLÉMENTS DU DOM ---
     const dashboardContent = document.getElementById('dashboard-content');
@@ -557,156 +556,71 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+// ===============================================
+    // SECTION 6 : GESTION DES CONTRATS (NOUVEAU)
     // ===============================================
-    // SECTION 6 : GESTION DES CONTRATS (PHASE 1)
-    // ===============================================
-    
-    const contractsBody = document.getElementById('contracts-list-body');
-    const contractModal = document.getElementById('add-contract-modal');
-    const contractForm = document.getElementById('add-contract-form');
+    const contractForm = document.getElementById('contract-form');
+    const contractSubmitBtn = document.getElementById('contract-submit-btn');
 
-    // A. Charger et afficher les contrats
-    const fetchContracts = async () => {
-        if (!contractsBody) return;
-        try {
-            const res = await fetch('/api/admin/contracts', { headers: { 'Authorization': `Bearer ${token}` } });
-            const contracts = await res.json();
-            
-            if (contracts.length === 0) {
-                contractsBody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-500 italic">Aucun contrat actif.</td></tr>';
-                return;
-            }
-
-            contractsBody.innerHTML = contracts.map(c => {
-                // Calcul du pourcentage
-                const percent = c.target > 0 ? Math.min(100, Math.round((c.current / c.target) * 100)) : 0;
-                let barColor = 'bg-blue-500';
-                if(percent >= 100) barColor = 'bg-green-500';
-                
-                // Jours restants
-                const end = new Date(c.endDate);
-                const now = new Date();
-                const diffTime = end - now;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                
-                let timeBadge = `<span class="bg-gray-700 text-xs px-2 py-1 rounded">${diffDays}j restants</span>`;
-                if(diffDays < 0) timeBadge = `<span class="bg-red-900 text-red-200 text-xs px-2 py-1 rounded">Expiré</span>`;
-                else if(c.status === 'completed') timeBadge = `<span class="bg-green-900 text-green-200 text-xs px-2 py-1 rounded">Terminé</span>`;
-
-                return `
-                <tr class="border-b border-gray-700 hover:bg-gray-750">
-                    <td class="px-4 py-3">
-                        <div class="font-bold text-white">@${c.username}</div>
-                        <div class="text-xs text-gray-500">${c.telegramId}</div>
-                    </td>
-                    <td class="px-4 py-3 font-mono text-yellow-400">${c.target} Pers.</td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-bold w-8 text-right">${percent}%</span>
-                            <div class="w-24 bg-gray-700 rounded-full h-2">
-                                <div class="${barColor} h-2 rounded-full" style="width: ${percent}%"></div>
-                            </div>
-                            <span class="text-xs text-gray-400">(${c.current})</span>
-                        </div>
-                    </td>
-                    <td class="px-4 py-3 font-bold text-green-400">${c.reward.toLocaleString()} F</td>
-                    <td class="px-4 py-3">${timeBadge}</td>
-                    <td class="px-4 py-3 text-right">
-                        <button onclick="deleteContract('${c.id}')" class="text-red-400 hover:text-red-200 transition" title="Supprimer">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-                `;
-            }).join('');
-
-        } catch (e) { console.error(e); }
-    };
-
-    // B. Ouvrir la modale (VERSION SUPER FORCE)
-    window.openContractModal = () => {
-        const modal = document.getElementById('add-contract-modal');
-        const form = document.getElementById('add-contract-form');
-
-        if (modal) {
-            console.log("🚀 Ouverture FORCÉE de la modale...");
-            
-            // 1. On retire la classe 'hidden'
-            modal.classList.remove('hidden');
-            
-            // 2. FORCE BRUTE : On applique le style directement (pour régler le bug d'affichage)
-            modal.style.display = 'flex';
-            modal.style.zIndex = '9999'; // On la met tout devant
-            
-            if(form) form.reset();
-        } else {
-            alert("Erreur : Fenêtre introuvable.");
-        }
-    };
-
-    // Gestion de la fermeture (Nouveau bouton avec ID)
-    const closeBtn = document.getElementById('close-contract-btn');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            const modal = document.getElementById('add-contract-modal');
-            modal.classList.add('hidden');
-            modal.style.display = 'none'; // On cache proprement
-        });
-    }
-
-    // C. Créer un contrat
     if (contractForm) {
         contractForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const btn = contractForm.querySelector('button[type="submit"]');
-            const originalText = btn.textContent;
-            btn.textContent = "Création...";
-            btn.disabled = true;
 
-            const payload = {
-                identifier: document.getElementById('contract-user').value.trim(),
-                target: parseInt(document.getElementById('contract-target').value),
-                duration: parseInt(document.getElementById('contract-duration').value),
-                reward: parseInt(document.getElementById('contract-reward').value)
-            };
+            // Récupération des valeurs
+            const telegramId = document.getElementById('contract-user-id').value;
+            const target = document.getElementById('contract-target').value;
+            const reward = document.getElementById('contract-reward').value;
+            const durationDays = document.getElementById('contract-duration').value;
+
+            if (!telegramId || !target || !reward || !durationDays) {
+                alert("Veuillez remplir tous les champs.");
+                return;
+            }
+
+            if(!confirm(`Confirmer l'envoi du contrat ?\n\n👤 ID: ${telegramId}\n🎯 Objectif: ${target} Inscrits\n💰 Prime: ${reward} FCFA\n⏳ Durée: ${durationDays} jours`)) return;
+
+            // UI Feedback
+            const originalText = contractSubmitBtn.innerHTML;
+            contractSubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
+            contractSubmitBtn.disabled = true;
 
             try {
                 const res = await fetch('/api/admin/contracts', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify(payload)
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({
+                        telegramId,
+                        target,
+                        reward,
+                        durationDays
+                    })
                 });
-                
-                const json = await res.json();
+
+                const data = await res.json();
 
                 if (res.ok) {
-                    alert("✅ " + json.message);
-                    contractModal.classList.add('hidden');
-                    fetchContracts();
+                    alert(`✅ Succès : ${data.message}`);
+                    contractForm.reset();
                 } else {
-                    alert("❌ Erreur : " + json.message);
+                    alert(`❌ Erreur : ${data.message}`);
                 }
+
             } catch (error) {
-                alert("Erreur de connexion.");
+                console.error("Erreur contrat:", error);
+                alert("❌ Erreur de connexion avec le serveur.");
             } finally {
-                btn.textContent = originalText;
-                btn.disabled = false;
+                contractSubmitBtn.innerHTML = originalText;
+                contractSubmitBtn.disabled = false;
             }
         });
     }
 
-    // D. Supprimer un contrat
-    window.deleteContract = async (id) => {
-        if(!confirm("Supprimer ce contrat ? L'ambassadeur ne verra plus sa progression.")) return;
-        try {
-            await fetch(`/api/admin/contracts/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-            fetchContracts();
-        } catch(e) { alert("Erreur suppression"); }
-    };
 
     // --- INITIALISATION ---
     fetchPendingTransactions();
     fetchWithdrawals();
     loadConfiguration();
-    fetchContracts(); 
 });
